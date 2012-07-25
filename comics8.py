@@ -4,13 +4,20 @@ import urllib2
 import httplib
 
 
-COMIXOLOGY_API_URL = 'https://secure.comixology.com/ios/api/com.iconology.windows.comics/3.0/?{0}'
+COMIXOLOGY_API_URL = 'https://secure.comixology.com/ios/api/{0}/{1}/?{2}'
+COMIXOLOGY_API_NAMES = {
+        'ios': 'com.iconology.comics',
+        'android': 'com.iconology.android.comics',
+        'windows8': 'com.iconology.windows.comics'
+        }
+COMIXOLOGY_API_VERSION = '3.0'
 
 class ComicsAccount:
-    def __init__(self, username):
+    def __init__(self, username, api_name='ios'):
         self.username = username
         self.password = None
         self.email = None
+        self.api_name = api_name
 
     def login(self, password):
         print "Logging in as '%s'..." % self.username
@@ -47,6 +54,31 @@ class ComicsAccount:
 
     def is_logged_in(self):
         return self.password != None
+
+    def get_recent_purchases(self):
+        self._check_logged_in()
+
+        data = {
+                'username': self.username,
+                'password': self.password,
+                'format': 'json',
+                'action': 'getRecentPurchases'
+                }
+        req = self._make_api_request(data)
+        resp = urllib2.urlopen(req)
+
+        purchases = []
+        result = json.loads(resp.read())
+        for item in result['items']:
+            purchases.append({
+                'comic_id': item['issue_summary']['comic_id'],
+                'series_id': item['issue_summary']['series_id'],
+                'title': item['issue_summary']['title'],
+                'num': item['issue_summary']['issue_num'],
+                'cover': item['issue_summary']['cover_image']['scalable_representation']['url'],
+                'url': item['issue_summary']['share_url']
+                })
+        return purchases
 
     def get_collection(self):
         self._check_logged_in()
@@ -138,7 +170,11 @@ class ComicsAccount:
             raise Exception("You must login.")
 
     def _make_api_request(self, data):
-        api_url = COMIXOLOGY_API_URL.format(urllib.urlencode(data))
+        api_url = COMIXOLOGY_API_URL.format(
+                COMIXOLOGY_API_NAMES[self.api_name],
+                COMIXOLOGY_API_VERSION,
+                urllib.urlencode(data)
+                )
         req = urllib2.Request(api_url)
         return req
 

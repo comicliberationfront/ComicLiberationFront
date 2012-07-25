@@ -26,6 +26,9 @@ class CLF:
         get_parser.add_argument('output')
         get_parser.set_defaults(func=self.do_get)
 
+        recent_purchases_parser = subs.add_parser('recent_purchases')
+        recent_purchases_parser.set_defaults(func=self.do_recent_purchases)
+
     def run(self):
         args = self.parser.parse_args()
         args.func(args)
@@ -56,6 +59,11 @@ class CLF:
         print "Saving issue to %s" % out_path
         builder.save(out_path, issue)
 
+    def do_recent_purchases(self, args):
+        account = ComicsAccount.load(os.path.expanduser('~/.clf_session'))
+        purchases = account.get_recent_purchases()
+        for p in purchases:
+            print "[%s] %s #%s" % (p['comic_id'], p['title'], p['num'])
 
 
 if __name__ == '__main__':
