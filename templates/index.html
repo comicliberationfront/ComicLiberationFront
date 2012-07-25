@@ -1,0 +1,17 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div>
+    <p>Logged in as {{ username }}</p>
+    <ul>
+        {% for series in collection %}
+        <li>
+            <h2>{{ series.title }}</h2>
+            <img src="{{ series.logo }}" width="250" height="250" />
+            <p>{{ series.issue_count }} issues</p>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}
+
