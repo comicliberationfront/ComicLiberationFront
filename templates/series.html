@@ -1,0 +1,17 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div>
+    <a href="{{ url_for('download', series_id=series_id) }}">Download all issues</a>
+</div>
+{% for issue in series %}
+<div>
+    <h2><a href="{{ issue.url }}">{{ issue.title }} #{{ issue.num }}</a></h2>
+    <img src="{{ issue.cover }}" width="250" />
+    <a class="download" data-seriesid="{{ series_id }}" data-comicid="{{ issue.comic_id }}" href="#">Download</a>
+</div>
+{% endfor %}
+{% endblock %}
+
+<div id="progress-bars">
+</div>

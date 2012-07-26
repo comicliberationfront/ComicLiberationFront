@@ -2,11 +2,29 @@
 <html>
     <head>
         <title>{{ title }}</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='toast/toast.css') }}">
+        {% block head %}{% endblock %}
     </head>
     <body>
         <div id="container">
             <h1>{{ title }}</h1>
             {% block content %}{% endblock %}
         </div>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="messages">
+            <ul>
+                {% for m in messages %}
+                <li>{{ m }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% block footerscripts %}
+        <script src="{{ url_for('static', filename='js/jquery-1.7.2.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/jquery-ui-1.8.22.custom.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/clf.js') }}"></script>
+        {% endblock %}
     </body>
 </html>
