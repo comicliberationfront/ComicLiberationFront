@@ -41,16 +41,16 @@ class ComicsAccount:
                 self.email
                 )
 
-    def save(self, path):
+    def get_cookie(self):
         self._check_logged_in()
 
         cookie = {
                 'username': self.username,
+                'password': self.password,
                 'email': self.email,
-                'password': self.password
+                'api_name': self.api_name
                 }
-        with open(path, 'w') as f:
-            f.write(json.dumps(cookie))
+        return cookie
 
     def is_logged_in(self):
         return self.password != None
@@ -179,13 +179,11 @@ class ComicsAccount:
         return req
 
     @staticmethod
-    def load(path):
-        with open(path, 'r') as f:
-            cookie_str = f.read()
-        cookie = json.loads(cookie_str)
+    def from_cookie(cookie):
         account = ComicsAccount(cookie['username'])
         account.email = cookie['email']
         account.password = cookie['password']
+        account.api_name = cookie['api_name']
         print "Loaded session for '%s' (%s)." % (account.username, account.email)
         return account
 

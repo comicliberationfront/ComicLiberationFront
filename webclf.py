@@ -13,8 +13,12 @@ app.secret_key = '$*^%&#53r3ret56$%@#Res'
 app.logger.setLevel(logging.DEBUG)
 app.logger.addHandler(logging.StreamHandler())
 
-cache = Cache()
+cache = Cache(os.path.join(os.path.dirname(__file__), 'cache'))
 active_downloads = {}
+
+def get_account():
+    cookie = cache.get('account', True)
+    return ComicsAccount.from_cookie(cookie)
 
 @app.route('/')
 def index():
@@ -23,7 +27,7 @@ def index():
 
     collection = cache.get('collection')
     if not collection:
-        account = cache.get('account', True)
+        account = get_account()
         collection = account.get_collection()
         cache.set('collection', collection)
 
@@ -40,7 +44,7 @@ def login():
     if request.method == 'POST':
         account = ComicsAccount(request.form['username'])
         account.login(request.form['password'])
-        cache.set('account', account)
+        cache.set('account', account.get_cookie())
         session['username'] = request.form['username']
         flash("You were logged in as '%s'." % request.form['username'])
         return redirect(url_for('index'))
@@ -56,7 +60,7 @@ def series(series_id):
 
     series = cache.get('series_%d' % series_id)
     if not series:
-        account = cache.get('account', True)
+        account = get_account()
         series = account.get_series(series_id)
         cache.set('series_%d' % series_id, series)
 
@@ -81,18 +85,12 @@ def download(series_id, comic_id):
         'status': 'ok'
         })
 
-@app.route('/download_status/<int:comic_id>')
-def get_download_status(comic_id):
-    if not comic_id in active_downloads:
-        return json.dumps({
-            'title': '',
-            'progress': -1
-            })
-    status = active_downloads[comic_id]
-    return json.dumps(status)
+@app.route('/downloads')
+def downloads():
+    return json.dumps(active_downloads)
 
 def do_download(comic_id):
-    account = cache.get('account', True)
+    account = get_account()
     issue = account.get_issue(comic_id)
     active_downloads[comic_id] = {
             'title': '%s #%s' % (issue['title'], issue['num']),

@@ -36,10 +36,12 @@ class CLF:
     def do_login(self, args):
         account = ComicsAccount(args.username)
         account.login(args.password)
-        account.save(os.path.expanduser('~/.clf_session'))
+        cookie = account.get_cookie()
+        with open(os.path.expanduser('~/.clf_session'), 'w') as f:
+            f.write(json.dumps(cookie))
 
     def do_list(self, args):
-        account = ComicsAccount.load(os.path.expanduser('~/.clf_session'))
+        account = self._get_account()
         if args.series_id:
             series = account.get_series(args.series_id)
             for issue in series:
@@ -50,7 +52,7 @@ class CLF:
                 print "[%s] %s (%s)" % (series['series_id'], series['title'], series['issue_count'])
 
     def do_get(self, args):
-        account = ComicsAccount.load(os.path.expanduser('~/.clf_session'))
+        account = self._get_account()
         issue = account.get_issue(args.issue_id)
         print "[%s] %s #%s" % (issue['comic_id'], issue['title'], issue['num'])
         
@@ -60,10 +62,16 @@ class CLF:
         builder.save(out_path, issue)
 
     def do_recent_purchases(self, args):
-        account = ComicsAccount.load(os.path.expanduser('~/.clf_session'))
+        account = self._get_account()
         purchases = account.get_recent_purchases()
         for p in purchases:
             print "[%s] %s #%s" % (p['comic_id'], p['title'], p['num'])
+
+    def _get_account(self, path=os.path.expanduser('~/.clf_session')):
+        with open(path, 'r') as f:
+            cookie_str = f.read()
+        cookie = json.loads(cookie_str)
+        return ComicsAccount.from_cookie(cookie)
 
 
 if __name__ == '__main__':
