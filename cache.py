@@ -39,7 +39,7 @@ class Cache(object):
             self.items.pop(key)
             path = self._get_item_path(key)
             if path and os.path.isfile(path):
-                os.delete(path)
+                os.remove(path)
             return None
         self.logger.debug('Cache hit: %s' % key)
         return item['data']
@@ -67,7 +67,7 @@ class Cache(object):
         if not key in self.items:
             path = self._get_item_path(key)
             if path and os.path.isfile(path):
-                self.logger.debug('Loading from disk cache: ' % key)
+                self.logger.debug('Loading from disk cache: %s' % key)
                 with open(path, 'r') as f:
                     item = json.load(f)
                     self.items[key] = item
