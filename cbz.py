@@ -31,7 +31,7 @@ class CbzBuilder:
         page_files.append(os.path.join(folder, '00_cover.jpg'))
         urllib.urlretrieve(issue['cover'], page_files[-1])
         if subscriber:
-            subscriber(1)
+            subscriber(100.0 / page_count)
 
         for idx, page in enumerate(issue['pages']):
             page_num = idx + 1
@@ -39,7 +39,7 @@ class CbzBuilder:
             page_files.append(os.path.join(folder, '%02d.jpg' % page_num))
             urllib.urlretrieve(page['uri'], page_files[-1])
             if subscriber:
-                subscriber(page_num + 1)
+                subscriber(100.0 * page_num + 1 / page_count)
             
         print "Creating CBZ: %s..." % out_path
         with zipfile.ZipFile(out_path, 'w') as zf:
@@ -51,5 +51,5 @@ class CbzBuilder:
             os.remove(name)
 
         if subscriber:
-            subscriber(-1)
+            subscriber(100)
 
