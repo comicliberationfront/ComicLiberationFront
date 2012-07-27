@@ -16,18 +16,20 @@ app.logger.addHandler(logging.StreamHandler())
 cache = Cache(os.path.join(os.path.dirname(__file__), 'cache'))
 active_downloads = {}
 
+
 def get_account():
-    cookie = cache.get('account', True)
+    cookie = cache.get('account')
+    if not cookie:
+        return None
     return ComicsAccount.from_cookie(cookie)
 
 @app.route('/')
 def index():
-    if not 'username' in session or not cache.has('account'):
-        return redirect(url_for('login'))
-
     collection = cache.get('collection')
     if not collection:
         account = get_account()
+        if not account:
+            return redirect(url_for('login'))
         collection = account.get_collection()
         cache.set('collection', collection)
 
@@ -55,12 +57,11 @@ def login():
 
 @app.route('/series/<int:series_id>')
 def series(series_id):
-    if not 'username' in session or not cache.has('account'):
-        return redirect(url_for('login'))
-
     series = cache.get('series_%d' % series_id)
     if not series:
         account = get_account()
+        if not account:
+            redirect(url_for('login'))
         series = account.get_series(series_id)
         cache.set('series_%d' % series_id, series)
 
@@ -75,7 +76,8 @@ def series(series_id):
 @app.route('/download/<int:series_id>', defaults={'comic_id': None})
 @app.route('/download/<int:series_id>/<int:comic_id>')
 def download(series_id, comic_id):
-    if not 'username' in session or not cache.has('account'):
+    account = cache.get('account')
+    if not account:
         return redirect(url_for('login'))
 
     app.logger.debug('Received download request for [%s]' % comic_id)
