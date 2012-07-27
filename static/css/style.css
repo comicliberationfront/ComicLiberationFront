@@ -1,0 +1,78 @@
+@import url(http://fonts.googleapis.com/css?family=Covered+By+Your+Grace);
+
+body {
+    padding: 1em;
+}
+
+a, a:link, a:active {
+    color: #1c94c4;
+    background: transparent;
+    text-decoration: none;
+}
+a:hover {
+    color: #fff;
+    background: #1c94c4;
+}
+a:visited {
+    color: #333;
+    background: transparent;
+}
+a:visited:hover {
+    color: #fff;
+    background: #333;
+}
+
+.header p { margin: 0; }
+.header h1 { 
+    margin: 0 0 0.5em 0;
+    font-family: 'Covered By Your Grace', cursive;
+    font-size: 4em;
+}
+.header .clf-title {
+    font: Tahoma, Geneva, sans-serif;
+    font-size: 1.2em;
+    text-transform: uppercase;
+}
+.header .clf-title span.w1 { font-style: italic; }
+.header .clf-title span.w2 { font-weight: bold; }
+.header .clf-title span.w3 { font-style: italic; }
+.header .info {
+    color: #666;
+    text-transform: lowercase;
+}
+
+h2 {
+    height: 2em;
+    text-overflow: ellipsis;
+}
+img.cover {
+    width: 100%;
+}
+p.metadata {
+    color: #666;
+    text-transform: lowercase;
+    font-size: 0.8em;
+    margin: 0.25em 0 0.375em 0;
+}
+
+#downloads {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 50%;
+    padding: 1em;
+    background: #fdf5ce;
+    border: 3px solid #fbcb09;
+    display: none;
+}
+#downloads h2 {
+    margin: 0;
+    color: #1c94c4;
+    font-size: 1.5em;
+}
+#downloads p {
+    margin: 0;
+}
+.ui-progressbar {
+    height: 0.5em;
+}

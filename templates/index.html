@@ -1,17 +1,20 @@
 {% extends 'layout.html' %}
 
+{% block header %}
+<p class="info">Logged in as {{ username }}</p>
+{% endblock %}
+
 {% block content %}
 <div>
-    <p>Logged in as {{ username }}</p>
-    <ul>
+    <div class="grids">
         {% for series in collection %}
-        <li>
+        <div class="grid-4">
             <h2><a href="{{ url_for('series', series_id=series.series_id) }}">{{ series.title }}</a></h2>
-            <img src="{{ series.logo }}" width="250" height="250" />
-            <p>{{ series.issue_count }} issues</p>
-        </li>
+            <img class="cover" src="{{ series.logo }}" />
+            <p class="metadata">{{ series.issue_count }} issues</p>
+        </div>
         {% endfor %}
-    </ul>
+    </div>
 </div>
 {% endblock %}
 

@@ -3,16 +3,26 @@
     <head>
         <title>{{ title }}</title>
         <link rel="stylesheet" href="{{ url_for('static', filename='toast/toast.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-lightness/jquery-ui-1.8.22.custom.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
         {% block head %}{% endblock %}
     </head>
     <body>
-        <div id="container">
-            <h1>{{ title }}</h1>
+        <div class="wrap">
+            <div class="header">
+                <p class="clf-title"><span class="w1">Comic</span><span class="w2">Liberation</span><span class="w3">Front</span></p>
+                <h1>{{ title }}</h1>
+                {% block header %}{% endblock %}
+            </div>
             {% block content %}{% endblock %}
+        </div>
+        <div id="downloads">
+            <h2>Active downloads</h2>
+            <div class="download-progress"></div>
         </div>
         {% with messages = get_flashed_messages() %}
         {% if messages %}
-        <div class="messages">
+        <div id="messages">
             <ul>
                 {% for m in messages %}
                 <li>{{ m }}</li>
