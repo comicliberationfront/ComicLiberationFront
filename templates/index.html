@@ -9,7 +9,7 @@
     <div class="grids">
         {% for series in collection %}
         <div class="grid-4">
-            <h2><a href="{{ url_for('series', series_id=series.series_id) }}">{{ series.title }}</a></h2>
+            <h2 class="series-title"><a href="{{ url_for('series', series_id=series.series_id) }}">{{ series.title }}</a></h2>
             <img class="cover" src="{{ series.logo }}" />
             <p class="metadata">{{ series.issue_count }} issues</p>
         </div>

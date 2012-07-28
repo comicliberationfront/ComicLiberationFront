@@ -5,6 +5,7 @@ body {
 }
 
 a, a:link, a:active {
+    padding: 0 0.3em;
     color: #1c94c4;
     background: transparent;
     text-decoration: none;
@@ -41,7 +42,7 @@ a:visited:hover {
     text-transform: lowercase;
 }
 
-h2 {
+h2.series-title {
     height: 2em;
     text-overflow: ellipsis;
 }
@@ -54,6 +55,8 @@ p.metadata {
     font-size: 0.8em;
     margin: 0.25em 0 0.375em 0;
 }
+a.download:visited { color: #1c94c4; }
+a.download:visited:hover { color: #fff; background: #1c94c4; }
 
 #downloads {
     position: fixed;
