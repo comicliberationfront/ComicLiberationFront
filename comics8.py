@@ -1,6 +1,7 @@
 import json
 import urllib
 import urllib2
+import urlparse
 import httplib
 
 
@@ -95,12 +96,20 @@ class ComicsAccount:
         collection = []
         result = json.loads(resp.read())
         for item in result['items']:
-            collection.append({
+            series = {
                 'series_id': item['series_id'],
                 'title': item['title'],
+                'volume_num': None,
+                'volume_title': None,
                 'logo': item['square_image']['scalable_representation']['url'],
                 'issue_count': item['total_comics']
-                })
+                }
+            if 'volume_num' in item:
+                series['volume_num'] = item['volume_num']
+            if 'volume_title' in item:
+                series['volume_title'] = item['volume_title']
+            collection.append(series)
+
         return collection
 
     def get_series(self, series_id):
@@ -117,16 +126,24 @@ class ComicsAccount:
         resp = urllib2.urlopen(req)
 
         result = json.loads(resp.read())
+        print result
         issues = []
         for item in result['items']:
-            issues.append({
+            issue = {
                 'comic_id': item['issue_summary']['comic_id'],
                 'series_id': item['issue_summary']['series_id'],
                 'title': item['issue_summary']['title'],
                 'num': item['issue_summary']['issue_num'],
+                'volume_num': None,
+                'volume_title': None,
                 'cover': item['issue_summary']['cover_image']['scalable_representation']['url'],
                 'url': item['issue_summary']['share_url']
-                })
+                }
+            if 'volume_num' in item['issue_summary']:
+                issue['volume_num'] = item['issue_summary']['volume_num']
+            if 'volume_title' in item['issue_summary']:
+                issue['volume_title'] = item['issue_summary']['volume_title']
+            issues.append(issue)
         return issues
 
     def get_issue(self, comic_id):
@@ -186,4 +203,15 @@ class ComicsAccount:
         account.api_name = cookie['api_name']
         print "Loaded session for '%s' (%s)." % (account.username, account.email)
         return account
+
+class CDN:
+    @staticmethod
+    def get_resized(url, width, height):
+        comps = urlparse.urlparse(url)
+        query = urlparse.parse_qs(comps.query)
+        re_url = 'https://dcomixologyssl.sslcs.cdngc.net' + comps.path + '?'
+        for key, val in query.iteritems():
+            re_url += '%s=%s&' % (key, val[0])
+        re_url += 'width=%d&height=%d' % (width, height)
+        return re_url
 
