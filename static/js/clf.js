@@ -39,9 +39,14 @@ $(document).ready(function(){
         var seriesid = $(this).attr('data-seriesid')
         var comicid = $(this).attr('data-comicid')
         $.getJSON('/download/'+seriesid+'/'+comicid)
-        if (downloadUpdateTimer === false) {
-            downloadUpdateTimer = setInterval(updateDownloads, 1000)
-        }
+
+        // The current download will take a bit of time to show-up
+        // on the server so let's start showing the progress after 1 second.
+        setTimeout(function() {
+            if (downloadUpdateTimer === false) {
+                downloadUpdateTimer = setInterval(updateDownloads, 1000)
+            }
+        }, 1000)
     })
  });
 
