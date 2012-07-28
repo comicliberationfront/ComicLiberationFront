@@ -1,6 +1,8 @@
 #!/usr/bin/python
+import os
 import os.path
 import argparse
+import json
 import cbz
 from comics8 import ComicsAccount
 
