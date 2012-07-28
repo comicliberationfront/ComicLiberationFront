@@ -5,7 +5,6 @@ body {
 }
 
 a, a:link, a:active {
-    padding: 0 0.3em;
     color: #1c94c4;
     background: transparent;
     text-decoration: none;
@@ -41,19 +40,22 @@ a:visited:hover {
     color: #666;
     text-transform: lowercase;
 }
-
-h2.series-title {
+p.series-title, p.issue-title {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+p.series-title {
     height: 2em;
     text-overflow: ellipsis;
-}
-img.cover {
-    width: 100%;
 }
 p.metadata {
     color: #666;
     text-transform: lowercase;
     font-size: 0.8em;
     margin: 0.25em 0 0.375em 0;
+}
+img.cover {
+    max-width: 100%;
 }
 a.download:visited { color: #1c94c4; }
 a.download:visited:hover { color: #fff; background: #1c94c4; }

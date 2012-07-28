@@ -5,7 +5,7 @@ import logging
 import json
 from cache import Cache
 import cbz
-from comics8 import ComicsAccount
+from comics8 import ComicsAccount, CDN
 from flask import Flask, session, redirect, url_for, escape, request, render_template, flash
 
 app = Flask(__name__)
@@ -23,15 +23,30 @@ def get_account():
         return None
     return ComicsAccount.from_cookie(cookie)
 
+def get_display_title(item):
+    display_title = item['title']
+    if 'volume_num' in item and item['volume_num']:
+        display_title += ' Vol.%s' % item['volume_num']
+    if 'volume_title' in item and item['volume_title']:
+        display_title += ': %s' % item['volume_title']
+    if 'num' in item and item['num']:
+        display_title += ' #%s' % item['num']
+    return display_title
+
+
 @app.route('/')
 def index():
     collection = cache.get('collection')
-    if not collection:
+    if not collection or request.args.get('nocache', False):
         account = get_account()
         if not account:
             return redirect(url_for('login'))
         collection = account.get_collection()
         cache.set('collection', collection)
+
+    for series in collection:
+        series['logo'] = CDN.get_resized(series['logo'], 170, 170)
+        series['display_title'] = get_display_title(series)
 
     return render_template(
             'index.html', 
@@ -58,10 +73,10 @@ def login():
 @app.route('/series/<int:series_id>')
 def series(series_id):
     series = cache.get('series_%d' % series_id)
-    if not series:
+    if not series or request.args.get('nocache', False):
         account = get_account()
         if not account:
-            redirect(url_for('login'))
+            return redirect(url_for('login'))
         series = account.get_series(series_id)
         cache.set('series_%d' % series_id, series)
 
@@ -69,19 +84,23 @@ def series(series_id):
     if not collection:
         account = get_account()
         if not account:
-            redirect(url_for('login'))
+            return redirect(url_for('login'))
         collection = account.get_collection()
         cache.set('collection', collection)
     
     series_info = find_series_in_collection(collection, str(series_id))
     if not series_info:
         raise Exception("Can't find series '%s' in collection." % series_id)
+
     lib_root = os.path.expanduser('~/Comicbooks')
     lib = cbz.CbzLibrary(lib_root)
     for issue in series:
         path = lib.build_issue_path(series_info['title'], issue['title'], issue['num'])
         if os.path.isfile(path):
             issue['downloaded'] = True
+
+        issue['cover'] = CDN.get_resized(issue['cover'], 170, 170)
+        issue['display_title'] = get_display_title(issue)
 
     return render_template(
             'series.html',

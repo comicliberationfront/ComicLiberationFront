@@ -9,11 +9,11 @@
 </div>
 <div class="grids">
     {% for issue in series %}
-    <div class="grid-3">
-        <img class="cover" src="{{ issue.cover }}" width="250" />
+    <div class="grid-2">
+        <img class="cover" src="{{ issue.cover }}" />
     </div>
-    <div class="grid-3">
-        <h2 class="issue-title"><a href="{{ issue.url }}">{{ issue.title }} #{{ issue.num }}</a></h2>
+    <div class="grid-2">
+        <p class="issue-title"><a href="{{ issue.url }}">{{ issue.display_title }}</a></p>
         {% if issue.downloaded %}
         <p>Downloaded (<a class="download" data-seriesid="{{ series_id }}" data-comicid="{{ issue.comic_id }}" href="#">Download&nbsp;Again</a>)</p>
         {% else %}
