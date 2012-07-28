@@ -65,6 +65,24 @@ def series(series_id):
         series = account.get_series(series_id)
         cache.set('series_%d' % series_id, series)
 
+    collection = cache.get('collection')
+    if not collection:
+        account = get_account()
+        if not account:
+            redirect(url_for('login'))
+        collection = account.get_collection()
+        cache.set('collection', collection)
+    
+    series_info = find_series_in_collection(collection, str(series_id))
+    if not series_info:
+        raise Exception("Can't find series '%s' in collection." % series_id)
+    lib_root = os.path.expanduser('~/Comicbooks')
+    lib = cbz.CbzLibrary(lib_root)
+    for issue in series:
+        path = lib.build_issue_path(series_info['title'], issue['title'], issue['num'])
+        if os.path.isfile(path):
+            issue['downloaded'] = True
+
     return render_template(
             'series.html',
             title="Your Collection",
@@ -91,6 +109,12 @@ def download(series_id, comic_id):
 def downloads():
     return json.dumps(active_downloads)
 
+def find_series_in_collection(collection, series_id):
+    for series in collection:
+        if series['series_id'] == series_id:
+            return series
+    return None
+
 def do_download(comic_id):
     account = get_account()
     issue = account.get_issue(comic_id)
@@ -100,14 +124,17 @@ def do_download(comic_id):
             }
 
     def on_cbz_progress(progress):
-        app.logger.debug('[%s] Downloading page %d...' % (comic_id, progress))
         active_downloads[comic_id]['progress'] = progress
 
-    app.logger.debug('Starting download of %s [%s]' % (issue['title'], comic_id))
-    builder = cbz.CbzBuilder(account)
-    out_path = os.path.expanduser('~/Comicbooks')
-    builder.save(out_path, issue, subscriber=on_cbz_progress)
-    active_downloads.pop(comic_id)
+    try:
+        app.logger.debug('Starting download of %s [%s]' % (issue['title'], comic_id))
+        builder = cbz.CbzBuilder(account)
+        out_path = os.path.expanduser('~/Comicbooks')
+        builder.save(out_path, issue, subscriber=on_cbz_progress)
+    except Exception as e:
+        app.logger.error('Error downloading comic: %s' % e)
+    finally:
+        active_downloads.pop(comic_id)
 
 if __name__ == "__main__":
     app.debug = True
