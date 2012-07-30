@@ -126,7 +126,6 @@ class ComicsAccount:
         resp = urllib2.urlopen(req)
 
         result = json.loads(resp.read())
-        print result
         issues = []
         for item in result['items']:
             issue = {
