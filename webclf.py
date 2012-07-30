@@ -6,7 +6,7 @@ import json
 from cache import Cache
 import cbz
 from comics8 import ComicsAccount, CDN
-from flask import Flask, session, redirect, url_for, escape, request, render_template, flash
+from flask import Flask, redirect, url_for, escape, request, render_template, flash
 
 app = Flask(__name__)
 app.secret_key = '$*^%&#53r3ret56$%@#Res'
@@ -20,8 +20,28 @@ active_downloads = {}
 def get_account():
     cookie = cache.get('account')
     if not cookie:
+        path = os.path.expanduser('~/.clf_session')
+        if os.path.isfile(path):
+            with open(path, 'r') as f:
+                cookie_str = f.read()
+            cookie = json.loads(cookie_str)
+    if not cookie:
         return None
     return ComicsAccount.from_cookie(cookie)
+
+def get_comicbooks_library_dir():
+    comics_dir = os.path.expanduser('~/Comicbooks')
+    settings = cache.get('account')
+    if not settings:
+        path = os.path.expanduser('~/.clf_session')
+        if os.path.isfile(path):
+            with open(path, 'r') as f:
+                settings_str = f.read()
+            settings = json.loads(settings_str)
+            cache.set('settings', settings)
+    if settings and 'comics_dir' in settings:
+        comics_dir = settings['comics_dir']
+    return comics_dir
 
 def get_display_title(item):
     display_title = item['title']
@@ -36,11 +56,12 @@ def get_display_title(item):
 
 @app.route('/')
 def index():
+    account = get_account()
+    if not account:
+        return redirect(url_for('login'))
+
     collection = cache.get('collection')
     if not collection or request.args.get('nocache', False):
-        account = get_account()
-        if not account:
-            return redirect(url_for('login'))
         collection = account.get_collection()
         cache.set('collection', collection)
 
@@ -51,7 +72,7 @@ def index():
     return render_template(
             'index.html', 
             title="Your Collection",
-            username=session['username'],
+            username=account.username,
             collection=collection
             )
 
@@ -62,7 +83,6 @@ def login():
         account = ComicsAccount(request.form['username'])
         account.login(request.form['password'])
         cache.set('account', account.get_cookie())
-        session['username'] = request.form['username']
         flash("You were logged in as '%s'." % request.form['username'])
         return redirect(url_for('index'))
     return render_template(
@@ -70,21 +90,29 @@ def login():
             title="Login to Comixology"
             )
 
+@app.route('/settings', methods = ['GET', 'POST'])
+def settings():
+    if request.method == 'POST':
+        pass
+    return render_template(
+            'settings.html',
+            title="Settings"
+            )
+
+
 @app.route('/series/<int:series_id>')
 def series(series_id):
+    account = get_account()
+    if not account:
+        return redirect(url_for('login'))
+
     series = cache.get('series_%d' % series_id)
     if not series or request.args.get('nocache', False):
-        account = get_account()
-        if not account:
-            return redirect(url_for('login'))
         series = account.get_series(series_id)
         cache.set('series_%d' % series_id, series)
 
     collection = cache.get('collection')
     if not collection:
-        account = get_account()
-        if not account:
-            return redirect(url_for('login'))
         collection = account.get_collection()
         cache.set('collection', collection)
     
@@ -92,7 +120,7 @@ def series(series_id):
     if not series_info:
         raise Exception("Can't find series '%s' in collection." % series_id)
 
-    lib_root = os.path.expanduser('~/Comicbooks')
+    lib_root = get_comicbooks_library_dir()
     lib = cbz.CbzLibrary(lib_root)
     for issue in series:
         path = lib.build_issue_path(series_info['title'], issue['title'], issue['num'])
@@ -105,7 +133,7 @@ def series(series_id):
     return render_template(
             'series.html',
             title="Your Collection",
-            username=session['username'],
+            username=account.username,
             series_id=series_id,
             series=series
             )
@@ -113,10 +141,6 @@ def series(series_id):
 @app.route('/download/<int:series_id>', defaults={'comic_id': None})
 @app.route('/download/<int:series_id>/<int:comic_id>')
 def download(series_id, comic_id):
-    account = cache.get('account')
-    if not account:
-        return redirect(url_for('login'))
-
     app.logger.debug('Received download request for [%s]' % comic_id)
     if not comic_id in active_downloads:
         thread.start_new_thread(do_download, (comic_id,))
@@ -146,10 +170,10 @@ def do_download(comic_id):
         active_downloads[comic_id]['progress'] = progress
 
     try:
-        app.logger.debug('Starting download of %s [%s]' % (issue['title'], comic_id))
         builder = cbz.CbzBuilder(account)
-        out_path = os.path.expanduser('~/Comicbooks')
-        builder.save(out_path, issue, subscriber=on_cbz_progress)
+        comics_dir = get_comicbooks_library_dir()
+        app.logger.debug('Downloading %s [%s] to: %s' % (issue['title'], comic_id, comics_dir))
+        builder.save(comics_dir, issue, subscriber=on_cbz_progress)
     except Exception as e:
         app.logger.error('Error downloading comic: %s' % e)
     finally:
