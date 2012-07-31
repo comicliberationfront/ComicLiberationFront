@@ -13,6 +13,17 @@ COMIXOLOGY_API_NAMES = {
         }
 COMIXOLOGY_API_VERSION = '3.0'
 
+
+def get_display_title(item):
+    display_title = item['title']
+    if 'volume_num' in item and item['volume_num']:
+        display_title += ' Vol.%s' % item['volume_num']
+    if 'volume_title' in item and item['volume_title']:
+        display_title += ': %s' % item['volume_title']
+    if 'num' in item and item['num']:
+        display_title += ' #%s' % item['num']
+    return display_title
+
 class ComicsAccount:
     def __init__(self, username, api_name='ios'):
         self.username = username
@@ -159,24 +170,47 @@ class ComicsAccount:
         resp = urllib2.urlopen(req)
         
         item = json.loads(resp.read())
+        item_info = item['issue_info']
         issue = {
                 'comic_id': item['comic_id'],
                 'version': item['version'],
-                'title': item['issue_info']['title'],
-                'publisher': item['issue_info']['publisher']['name'],
-                'series_id': item['issue_info']['series']['series_id'],
-                'series_title': item['issue_info']['series']['title'],
+                'title': item_info['title'],
+                'publisher': item_info['publisher']['name'],
+                'imprint': item_info['publisher']['name'],
                 'num': '',
-                'synopsis': item['issue_info']['synopsis'],
-                'cover': item['issue_info']['cover_image']['image_descriptors'][-1]['uri'],
+                'synopsis': item_info['synopsis'],
+                'cover': item_info['cover_image']['image_descriptors'][-1]['uri'],
+                'print_publish_date': item_info['print_publish_date'],
+                'series_id': item_info['series']['series_id'],
+                'series_title': item_info['series']['title'],
+                'series_synopsis': item_info['series']['synopsis'],
                 'pages': []
                 }
-        if 'issue_num' in item['issue_info']['series']:
-            issue['num'] = item['issue_info']['series']['issue_num']
+        if 'issue_num' in item_info['series']:
+            issue['num'] = item_info['series']['issue_num']
+        if 'parent' in item_info['publisher']:
+            issue['publisher'] = item_info['publisher']['parent']['name']
+        if 'creator_sections' in item_info:
+            for cs in item_info['creator_sections']:
+                creator_type = None
+                if cs['role']['role_id'] == '2':
+                    creator_type = 'writers'
+                elif cs['role']['role_id'] == '3':
+                    creator_type = 'artists'
+                elif cs['role']['role_id'] == '4':
+                    creator_type = 'pencillers'
+                elif cs['role']['role_id'] == '5':
+                    creator_type = 'inkers'
+                if creator_type:
+                    issue[creator_type] = [w['name']['display'] for w in cs['creators']]
         for page in item['book_info']['pages']:
+            img_desc = page['descriptor_set']['image_descriptors']
             p = {
-                'thumbnail': page['descriptor_set']['image_descriptors'][0]['uri'],
-                'uri': page['descriptor_set']['image_descriptors'][1]['uri']
+                'thumbnail': img_desc[0]['uri'],
+                'uri': img_desc[1]['uri'],
+                'width': img_desc[1]['pixel_width'],
+                'height': img_desc[1]['pixel_height'],
+                'size': img_desc[1]['expected_content_length']
                 }
             issue['pages'].append(p)
         return issue
@@ -199,7 +233,10 @@ class ComicsAccount:
         account = ComicsAccount(cookie['username'])
         account.email = cookie['email']
         account.password = cookie['password']
-        account.api_name = cookie['api_name']
+        if 'api_name' in cookie:
+            account.api_name = cookie['api_name']
+        else:
+            account.api_name = 'windows8'
         print "Loaded session for '%s' (%s)." % (account.username, account.email)
         return account
 

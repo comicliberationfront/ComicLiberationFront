@@ -1,10 +1,12 @@
 #!/usr/bin/python
 import os
 import os.path
+import sys
 import argparse
 import json
+import pprint
 import cbz
-from comics8 import ComicsAccount
+from comics8 import ComicsAccount, get_display_title
 
 
 class CLF:
@@ -28,6 +30,10 @@ class CLF:
         get_parser.add_argument('output')
         get_parser.set_defaults(func=self.do_get)
 
+        print_parser = subs.add_parser('print')
+        print_parser.add_argument('issue_id')
+        print_parser.set_defaults(func=self.do_print)
+
         recent_purchases_parser = subs.add_parser('recent_purchases')
         recent_purchases_parser.set_defaults(func=self.do_recent_purchases)
 
@@ -47,7 +53,7 @@ class CLF:
         if args.series_id:
             series = account.get_series(args.series_id)
             for issue in series:
-                print "[%s] %s #%s: %s" % (issue['comic_id'], issue['title'], issue['num'], issue['cover'])
+                print "[%s] %s" % (issue['comic_id'], get_display_title(issue))
         else:
             collection = account.get_collection()
             for series in collection:
@@ -56,12 +62,19 @@ class CLF:
     def do_get(self, args):
         account = self._get_account()
         issue = account.get_issue(args.issue_id)
-        print "[%s] %s #%s" % (issue['comic_id'], issue['title'], issue['num'])
+        print "[%s] %s" % (issue['comic_id'], get_display_title(issue))
         
         builder = cbz.CbzBuilder(account)
         out_path = args.output.strip('\'" ')
         print "Saving issue to %s" % out_path
-        builder.save(out_path, issue)
+        builder.save(out_path, issue, subscriber=CLF._print_progress)
+        print ""
+
+    def do_print(self, args):
+        account = self._get_account()
+        issue = account.get_issue(args.issue_id)
+        pp = pprint.PrettyPrinter(indent=4)
+        pp.pprint(issue)
 
     def do_recent_purchases(self, args):
         account = self._get_account()
@@ -74,6 +87,11 @@ class CLF:
             cookie_str = f.read()
         cookie = json.loads(cookie_str)
         return ComicsAccount.from_cookie(cookie)
+
+    @staticmethod
+    def _print_progress(value):
+        sys.stdout.write("\r%02d%%" % value)
+        sys.stdout.flush()
 
 
 if __name__ == '__main__':
