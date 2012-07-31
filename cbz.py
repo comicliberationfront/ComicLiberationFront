@@ -4,6 +4,7 @@ import urllib
 import zipfile
 import re
 import string
+import comicrack
 
 valid_path_chars = "-_.() /\\%s%s" % (string.ascii_letters, string.digits)
 
@@ -47,33 +48,45 @@ class CbzBuilder:
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
 
+        print "Creating metadata..."
+        comic_info = comicrack.ComicInfo.from_issue(issue)
+        comic_info.notes = "Tool: ComicLiberationFront, Owner: %s" % self.account.username
+        comic_info_path = os.path.join(temp_folder, 'ComicInfo.xml') 
+        comic_info.save(comic_info_path)
+
         print "Downloading pages..."
         page_files = []
         page_count = len(issue['pages']) + 1  # plus the cover
         if subscriber:
             subscriber(0)
 
-        page_files.append(os.path.join(temp_folder, '00_cover.jpg'))
+        page_files.append(os.path.join(temp_folder, '0000_cover.jpg'))
         urllib.urlretrieve(issue['cover'], page_files[-1])
         if subscriber:
             subscriber(100.0 / page_count)
 
         for idx, page in enumerate(issue['pages']):
             page_num = idx + 1
-            page_files.append(os.path.join(temp_folder, '%02d.jpg' % page_num))
+            page_files.append(os.path.join(temp_folder, '%04d.jpg' % page_num))
             urllib.urlretrieve(page['uri'], page_files[-1])
             if subscriber:
                 subscriber(100.0 * (page_num + 1) / page_count)
             
         print "Creating CBZ: %s..." % out_path
         with zipfile.ZipFile(out_path, 'w') as zf:
+            zf.write(comic_info_path, 'ComicInfo.xml')
             for name in page_files:
                 zf.write(name, os.path.basename(name))
 
         print "Cleaning up..."
-        for name in page_files:
-            os.remove(name)
-        os.rmdir(temp_folder)
+        try:
+            os.remove(comic_info_path)
+            for name in page_files:
+                os.remove(name)
+            os.rmdir(temp_folder)
+        except Exception as e:
+            print "Error while cleaning up: %s" % e
+            print "The comic has however been successfully downloaded."
 
         if subscriber:
             subscriber(100)
