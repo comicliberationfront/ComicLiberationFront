@@ -76,3 +76,14 @@ class Cache(object):
             return self.items[key]
         return None
 
+
+class DummyCache:
+    def has(self, key):
+        return False
+
+    def get(self, key):
+        return None
+
+    def set(self, key, data, lifetime=None):
+        pass
+
