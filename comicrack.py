@@ -65,14 +65,17 @@ class ComicInfo:
         self.locations = []
         self.pages = []
 
-    def save(self, path):
+    def __str__(self):
         dom = self.get_xml_dom()
+        return etree.tostring(
+            dom,
+            xml_declaration=True,
+            pretty_print=True
+            )
+
+    def save(self, path):
         with open(path, 'w') as f:
-            f.write(etree.tostring(
-                dom,
-                xml_declaration=True,
-                pretty_print=True
-                ))
+            f.write(str(self))
         
     def get_xml_dom(self):
         root = etree.Element('ComicInfo')
