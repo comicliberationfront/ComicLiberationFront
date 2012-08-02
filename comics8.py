@@ -92,6 +92,18 @@ class ComicsAccount:
                 })
         return purchases
 
+    def get_all_issues(self, series_id=None):
+        if series_id:
+            series = self.get_series(series_id)
+            for i in series:
+                yield self.get_issue(i['comic_id'])
+        else:
+            collection = self.get_collection()
+            for series in collection:
+                issues = self.get_series(series['series_id'])
+                for i in issues:
+                    yield self.get_issue(i['comic_id'])
+
     def get_collection(self):
         self._check_logged_in()
 
