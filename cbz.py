@@ -4,6 +4,7 @@ import urllib
 import zipfile
 import re
 import string
+import json
 import comicrack
 import comicbookinfo
 
@@ -12,6 +13,18 @@ valid_path_chars = "-_.() /\\%s%s" % (string.ascii_letters, string.digits)
 
 def _clean_path(path):
     return re.sub('[^\w\d &\-_\.\(\)/\\\\]', '-', path)
+
+
+def get_issue_version(path):
+    with zipfile.ZipFile(path, 'r') as zf:
+        if not zf.comment:
+            return -1
+        cbi = json.loads(zf.comment)
+    if not 'x-ComicLiberationFront' in cbi:
+        return -1
+    if not 'version' in cbi['x-ComicLiberationFront']:
+        return -1
+    return cbi['x-ComicLiberationFront']['version']
 
 
 class CbzLibrary:
@@ -47,13 +60,7 @@ class CbzBuilder:
             out_path = lib.build_issue_path(issue['series_title'], issue['title'], issue['num'])
 
         print "Re-creating metadata..."
-        ci = comicrack.ComicInfo.from_issue(issue)
-        ci.notes = "Tool: ComicLiberationFront/0.1.0, Owner: %s" % self.account.username
-
-        cbi = comicbookinfo.ComicBookInfo.from_issue(issue)
-        cbi.extra['x-ComicLiberationFront'] = {
-                'owner': self.account.username
-                }
+        ci, cbi = self._get_metadata(issue)
 
         print "Updating CBZ: %s..." % out_path
         os.rename(out_path, out_path + '.old')
@@ -80,15 +87,7 @@ class CbzBuilder:
             os.makedirs(temp_folder)
 
         print "Creating metadata..."
-        comic_info = comicrack.ComicInfo.from_issue(issue)
-        comic_info.notes = "Tool: ComicLiberationFront, Owner: %s" % self.account.username
-        comic_info_path = os.path.join(temp_folder, 'ComicInfo.xml') 
-        comic_info.save(comic_info_path)
-
-        cbi = comicbookinfo.ComicBookInfo.from_issue(issue)
-        cbi.extra['x-ComicLiberationFront'] = {
-                'owner': self.account.username
-                }
+        ci, cbi = self._get_metadata(issue)
 
         print "Downloading pages..."
         page_files = []
@@ -113,18 +112,28 @@ class CbzBuilder:
             
         print "Creating CBZ: %s..." % out_path
         with zipfile.ZipFile(out_path, 'w') as zf:
-            zf.write(comic_info_path, 'ComicInfo.xml')
+            zf.writestr('ComicInfo.xml', unicode(str(ci), 'utf-8'))
             for name in page_files:
                 zf.write(name, os.path.basename(name))
             zf.comment = cbi.get_json_str()
 
         print "Cleaning up..."
         try:
-            os.remove(comic_info_path)
             for name in page_files:
                 os.remove(name)
             os.rmdir(temp_folder)
         except Exception as e:
             print "Error while cleaning up: %s" % e
             print "The comic has however been successfully downloaded."
+
+    def _get_metadata(self, issue):
+        ci = comicrack.ComicInfo.from_issue(issue)
+        ci.notes = "Tool: ComicLiberationFront/0.1.0, Owner: %s" % self.account.username
+
+        cbi = comicbookinfo.ComicBookInfo.from_issue(issue)
+        cbi.extra['x-ComicLiberationFront'] = {
+                'owner': self.account.username,
+                'version': issue['version']
+                }
+        return (ci, cbi)
 
