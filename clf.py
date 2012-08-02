@@ -28,6 +28,7 @@ class CLF:
         get_parser = subs.add_parser('get')
         get_parser.add_argument('issue_id')
         get_parser.add_argument('output')
+        get_parser.add_argument('-u', '--update', action='store_true')
         get_parser.set_defaults(func=self.do_get)
 
         print_parser = subs.add_parser('print')
@@ -66,9 +67,10 @@ class CLF:
         
         builder = cbz.CbzBuilder(account)
         out_path = args.output.strip('\'" ')
-        print "Saving issue to %s" % out_path
-        builder.save(out_path, issue, subscriber=CLF._print_progress)
-        print ""
+        if args.update:
+            builder.update(out_path, issue)
+        else:
+            builder.save(out_path, issue, subscriber=CLF._print_progress)
 
     def do_print(self, args):
         account = self._get_account()
@@ -90,7 +92,10 @@ class CLF:
 
     @staticmethod
     def _print_progress(value):
-        sys.stdout.write("\r%02d%%" % value)
+        if value < 100:
+            sys.stdout.write("\r%02d%%" % value)
+        else:
+            sys.stdout.write("\r100%\n")
         sys.stdout.flush()
 
 

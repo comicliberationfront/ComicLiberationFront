@@ -5,6 +5,8 @@ import zipfile
 import re
 import string
 import comicrack
+import comicbookinfo
+
 
 valid_path_chars = "-_.() /\\%s%s" % (string.ascii_letters, string.digits)
 
@@ -39,6 +41,35 @@ class CbzBuilder:
     def __init__(self, account):
         self.account = account
 
+    def update(self, out_path, issue, add_folder_structure = True):
+        if add_folder_structure:
+            lib = CbzLibrary(out_path)
+            out_path = lib.build_issue_path(issue['series_title'], issue['title'], issue['num'])
+
+        print "Re-creating metadata..."
+        ci = comicrack.ComicInfo.from_issue(issue)
+        ci.notes = "Tool: ComicLiberationFront/0.1.0, Owner: %s" % self.account.username
+
+        cbi = comicbookinfo.ComicBookInfo.from_issue(issue)
+        cbi.extra['x-ComicLiberationFront'] = {
+                'owner': self.account.username
+                }
+
+        print "Updating CBZ: %s..." % out_path
+        os.rename(out_path, out_path + '.old')
+        with zipfile.ZipFile(out_path + '.old', 'a') as zfin:
+            with zipfile.ZipFile(out_path, 'w') as zfout:
+                for info in zfin.infolist():
+                    if info.filename == 'ComicInfo.xml':
+                        zfout.writestr('ComicInfo.xml', unicode(str(ci), 'utf-8'))
+                    else:
+                        zfout.writestr(info, zfin.read(info.filename))
+                zfout.comment = cbi.get_json_str()
+
+        print "Cleaning up..."
+        os.remove(out_path + '.old')
+
+
     def save(self, out_path, issue, add_folder_structure = True, subscriber = None):
         if add_folder_structure:
             lib = CbzLibrary(out_path)
@@ -53,6 +84,11 @@ class CbzBuilder:
         comic_info.notes = "Tool: ComicLiberationFront, Owner: %s" % self.account.username
         comic_info_path = os.path.join(temp_folder, 'ComicInfo.xml') 
         comic_info.save(comic_info_path)
+
+        cbi = comicbookinfo.ComicBookInfo.from_issue(issue)
+        cbi.extra['x-ComicLiberationFront'] = {
+                'owner': self.account.username
+                }
 
         print "Downloading pages..."
         page_files = []
@@ -71,12 +107,16 @@ class CbzBuilder:
             urllib.urlretrieve(page['uri'], page_files[-1])
             if subscriber:
                 subscriber(100.0 * (page_num + 1) / page_count)
+
+        if subscriber:
+            subscriber(100)
             
         print "Creating CBZ: %s..." % out_path
         with zipfile.ZipFile(out_path, 'w') as zf:
             zf.write(comic_info_path, 'ComicInfo.xml')
             for name in page_files:
                 zf.write(name, os.path.basename(name))
+            zf.comment = cbi.get_json_str()
 
         print "Cleaning up..."
         try:
@@ -87,7 +127,4 @@ class CbzBuilder:
         except Exception as e:
             print "Error while cleaning up: %s" % e
             print "The comic has however been successfully downloaded."
-
-        if subscriber:
-            subscriber(100)
 
