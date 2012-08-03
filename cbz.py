@@ -42,12 +42,25 @@ class CbzLibrary:
         root, dirs, files = os.walk(series_path)
         return files
 
-    def build_issue_path(self, series_title, issue_title, issue_num):
-        if not issue_num:
-            filename = "%s.cbz" % issue_title
+    def get_issue_path(self, issue):
+        if not issue['title'] or not issue['series_title']:
+            raise Exception("Can't build comic path without a title for the issue and series.")
+
+        if not issue['num']:
+            filename = "%s.cbz" % issue['title']
         else:
-            filename = "%s %02d.cbz" % (issue_title, int(issue_num))
-        return os.path.join(self.root_path, series_title, filename)
+            filename = "%s %02d.cbz" % (issue['title'], int(issue['num']))
+        filename = _clean_path(filename)
+        
+        dirname = _clean_path(issue['series_title'])
+        if 'volume_num' in issue and issue['volume_num']:
+            dirname += '%sVolume %02d' % (os.sep, int(issue['volume_num']))
+            if 'volume_title' in issue and issue['volume_title']:
+                dirname += ' - %s' % _clean_path(issue['volume_title'])
+        elif 'volume_title' in issue and issue['volume_title']:
+            dirname += '%s%s' % (os.sep, _clean_path(issue['volume_title']))
+        
+        return os.path.join(self.root_path, dirname, filename)
 
 
 class CbzBuilder:
@@ -57,7 +70,7 @@ class CbzBuilder:
     def update(self, out_path, issue, add_folder_structure = True):
         if add_folder_structure:
             lib = CbzLibrary(out_path)
-            out_path = lib.build_issue_path(issue['series_title'], issue['title'], issue['num'])
+            out_path = lib.get_issue_path(issue)
 
         print "Re-creating metadata..."
         ci, cbi = self._get_metadata(issue)
@@ -80,7 +93,7 @@ class CbzBuilder:
     def save(self, out_path, issue, add_folder_structure = True, subscriber = None):
         if add_folder_structure:
             lib = CbzLibrary(out_path)
-            out_path = lib.build_issue_path(issue['series_title'], issue['title'], issue['num'])
+            out_path = lib.get_issue_path(issue)
 
         temp_folder = os.path.join(os.path.dirname(out_path), '__clf_download', issue['comic_id'])
         if not os.path.exists(temp_folder):
