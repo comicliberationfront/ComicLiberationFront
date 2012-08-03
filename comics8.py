@@ -192,14 +192,23 @@ class ComicsAccount:
                 'num': '',
                 'synopsis': item_info['synopsis'],
                 'cover': item_info['cover_image']['image_descriptors'][-1]['uri'],
-                'print_publish_date': item_info['print_publish_date'],
+                'print_publish_date': {
+                    'year': 0,
+                    'month': 0
+                    },
                 'series_id': item_info['series']['series_id'],
                 'series_title': item_info['series']['title'],
                 'series_synopsis': item_info['series']['synopsis'],
                 'pages': []
                 }
+        if 'print_publish_date' in item_info:
+            issue['print_publish_date'] = item_info['print_publish_date']
         if 'issue_num' in item_info['series']:
             issue['num'] = item_info['series']['issue_num']
+        if 'issue_volume_title' in item_info['series']:
+            issue['volume_title'] = item_info['series']['issue_volume_title']
+        if 'issue_volume_num' in item_info['series']:
+            issue['volume_num'] = item_info['series']['issue_volume_num']
         if 'parent' in item_info['publisher']:
             issue['publisher'] = item_info['publisher']['parent']['name']
         if 'creator_sections' in item_info:
