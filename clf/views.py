@@ -1,56 +1,20 @@
-import os
+import json
 import os.path
 import thread
-import logging
-import json
-from functools import wraps
+from flask import g, redirect, url_for, request, render_template, flash
 from cache import Cache, DummyCache
-import cbz
-from comics8 import ComicsAccount, CDN, get_display_title
-from flask import Flask, g, redirect, url_for, escape, request, render_template, flash
+from cbz import CbzLibrary
+from clf import app
+from comixology import ComicsAccount, CDN, get_display_title
+from helpers import login_required, get_comicbooks_library_dir
 
 
-''' Globals
-'''
-app = Flask(__name__)
-app.secret_key = '$*^%&#53r3ret56$%@#Res'
-app.logger.setLevel(logging.DEBUG)
-app.logger.addHandler(logging.StreamHandler())
-
+# Globals
 cache = Cache(os.path.join(os.path.dirname(__file__), 'cache'))
 active_downloads = {}
 
 
-''' Custom decorators
-'''
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not hasattr(g, 'account'):
-            path = os.path.expanduser('~/.clf_session')
-            if os.path.isfile(path):
-                with open(path, 'r') as fd:
-                    cookie_str = fd.read()
-                cookie = json.loads(cookie_str)
-                g.settings = cookie
-                g.account = ComicsAccount.from_cookie(cookie)
-        if not hasattr(g, 'account'):
-            return redirect(url_for('login', next=request.url))
-        return f(*args, **kwargs)
-    return decorated_function
-
-
-''' Helper functions
-'''
-def get_comicbooks_library_dir(settings):
-    comics_dir = os.path.expanduser('~/Comicbooks')
-    if settings and 'comics_dir' in settings:
-        comics_dir = settings['comics_dir']
-    return comics_dir
-
-
-''' Request pre/post-processors
-'''
+# Request pre/post-processors
 @app.before_request
 def before_request():
     g.cache = cache
@@ -58,8 +22,7 @@ def before_request():
         g.cache = DummyCache()
 
 
-''' Views
-'''
+# Views
 @app.route('/')
 @login_required
 def index():
@@ -98,7 +61,7 @@ def series(series_id):
         raise Exception("Can't find series '%s' in collection." % series_id)
 
     lib_root = get_comicbooks_library_dir(g.settings)
-    lib = cbz.CbzLibrary(lib_root)
+    lib = CbzLibrary(lib_root)
     for issue in series:
         path = lib.build_issue_path(
                 series_info['title'], 
@@ -165,8 +128,7 @@ def login(next=''):
             )
 
 
-''' Utility functions
-'''
+# Utility functions
 def find_series_in_collection(collection, series_id):
     for series in collection:
         if series['series_id'] == series_id:
@@ -192,11 +154,4 @@ def do_download(comic_id, account, settings):
         app.logger.error('Error downloading comic: %s' % e)
     finally:
         active_downloads.pop(comic_id)
-
-
-''' Start the webserver if run from the command-line.
-'''
-if __name__ == "__main__":
-    app.debug = True
-    app.run()
 

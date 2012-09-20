@@ -67,7 +67,7 @@ class CbzBuilder:
     def __init__(self, account):
         self.account = account
 
-    def update(self, out_path, issue, add_folder_structure = True):
+    def update(self, out_path, issue, add_folder_structure=False):
         if add_folder_structure:
             lib = CbzLibrary(out_path)
             out_path = lib.get_issue_path(issue)
@@ -90,7 +90,7 @@ class CbzBuilder:
         os.remove(out_path + '.old')
 
 
-    def save(self, out_path, issue, add_folder_structure = True, subscriber = None):
+    def save(self, out_path, issue, add_folder_structure=False, subscriber=None):
         if add_folder_structure:
             lib = CbzLibrary(out_path)
             out_path = lib.get_issue_path(issue)
