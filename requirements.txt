@@ -1,0 +1,6 @@
+Flask==0.9
+Flask-Script==0.4.0
+Jinja2==2.6
+Werkzeug==0.8.3
+argparse==1.2.1
+lxml==2.3
