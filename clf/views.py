@@ -2,43 +2,42 @@ import json
 import os.path
 import thread
 from flask import g, redirect, url_for, request, render_template, flash
+from auth import UserAccount, get_service_class, login_required
 from cache import Cache, DummyCache
-from cbz import CbzLibrary
+from cbz import CbzLibrary, CbzBuilder
 from clf import app
-from comixology import ComicsAccount, CDN, get_display_title
-from helpers import login_required, get_comicbooks_library_dir
 
 
 # Globals
 cache = Cache(os.path.join(os.path.dirname(__file__), 'cache'))
 active_downloads = {}
+app.clf_data = { 'cache': cache, 'account': None }
+try:
+    app.clf_data['account'] = UserAccount.load()
+except:
+    app.clf_data['account'] = UserAccount()
+app.clf_data['account'].current_service.cache = cache
 
 
 # Request pre/post-processors
 @app.before_request
 def before_request():
-    g.cache = cache
     if request.args.get('nocache', False):
-        g.cache = DummyCache()
+        app.clf_data['account'].current_service.cache = DummyCache()
 
 
 # Views
 @app.route('/')
 @login_required
 def index():
-    collection = g.cache.get('collection')
-    if not collection:
-        collection = g.account.get_collection()
-        g.cache.set('collection', collection)
-
+    collection = g.account.current_service.get_collection()
     for series in collection:
-        series['logo'] = CDN.get_resized(series['logo'], 170, 170)
-        series['display_title'] = get_display_title(series)
+        series.small_logo_url = g.account.current_service.cdn.get_resized(series.logo_url, 170, 170)
 
     return render_template(
             'index.html', 
             title="Your Collection",
-            username=g.account.username,
+            username=g.account.current_service.username,
             collection=collection
             )
 
@@ -46,38 +45,25 @@ def index():
 @app.route('/series/<int:series_id>')
 @login_required
 def series(series_id):
-    series = g.cache.get('series_%d' % series_id)
-    if not series:
-        series = g.account.get_series(series_id)
-        g.cache.set('series_%d' % series_id, series)
-
-    collection = g.cache.get('collection')
-    if not collection:
-        collection = g.account.get_collection()
-        g.cache.set('collection', collection)
-    
+    series = g.account.current_service.get_series(series_id)
+    collection = g.account.current_service.get_collection()
     series_info = find_series_in_collection(collection, str(series_id))
     if not series_info:
         raise Exception("Can't find series '%s' in collection." % series_id)
 
-    lib_root = get_comicbooks_library_dir(g.settings)
-    lib = CbzLibrary(lib_root)
+    lib = CbzLibrary(g.account.library_path)
     for issue in series:
-        path = lib.build_issue_path(
-                series_info['title'], 
-                issue['title'], 
-                issue['num']
-                )
+        issue.series_title = series_info.title # Patch missing series_title from Comixology
+        path = lib.get_issue_path(issue)
         if os.path.isfile(path):
-            issue['downloaded'] = True
+            issue.downloaded = True
 
-        issue['cover'] = CDN.get_resized(issue['cover'], 170, 170)
-        issue['display_title'] = get_display_title(issue)
+        issue.small_cover_url = g.account.current_service.cdn.get_resized(issue.cover_url, 170, 170)
 
     return render_template(
             'series.html',
             title="Your Collection",
-            username=g.account.username,
+            username=g.account.current_service.username,
             series_id=series_id,
             series=series
             )
@@ -89,7 +75,7 @@ def series(series_id):
 def download(series_id, comic_id):
     app.logger.debug('Received download request for [%s]' % comic_id)
     if not comic_id in active_downloads:
-        thread.start_new_thread(do_download, (comic_id, g.account, g.settings))
+        thread.start_new_thread(do_download, (comic_id, g.account))
     return json.dumps({
         'status': 'ok'
         })
@@ -131,14 +117,14 @@ def login(next=''):
 # Utility functions
 def find_series_in_collection(collection, series_id):
     for series in collection:
-        if series['series_id'] == series_id:
+        if series.series_id == series_id:
             return series
     return None
 
-def do_download(comic_id, account, settings):
-    issue = account.get_issue(comic_id)
+def do_download(comic_id, account):
+    issue = account.current_service.get_issue(comic_id)
     active_downloads[comic_id] = {
-            'title': '%s #%s' % (issue['title'], issue['num']),
+            'title': '%s #%s' % (issue.title, issue.num),
             'progress': 0
             }
 
@@ -146,10 +132,10 @@ def do_download(comic_id, account, settings):
         active_downloads[comic_id]['progress'] = progress
 
     try:
-        builder = cbz.CbzBuilder(account)
-        comics_dir = get_comicbooks_library_dir(settings)
-        app.logger.debug('Downloading %s [%s] to: %s' % (issue['title'], comic_id, comics_dir))
-        builder.save(comics_dir, issue, subscriber=on_cbz_progress)
+        builder = CbzBuilder()
+        builder.set_watermark(account.current_service_name, account.current_service.username)
+        app.logger.debug('Downloading %s [%s] to: %s' % (issue.title, comic_id, account.library_path))
+        builder.save(account.library_path, issue, subscriber=on_cbz_progress, add_folder_structure=True)
     except Exception as e:
         app.logger.error('Error downloading comic: %s' % e)
     finally:

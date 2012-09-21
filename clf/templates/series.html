@@ -10,7 +10,7 @@
 <div class="grids">
     {% for issue in series %}
     <div class="grid-2">
-        <img class="cover" src="{{ issue.cover }}" />
+        <img class="cover" src="{{ issue.small_cover_url }}" />
     </div>
     <div class="grid-2">
         <p class="issue-title"><a href="{{ issue.url }}">{{ issue.display_title }}</a></p>

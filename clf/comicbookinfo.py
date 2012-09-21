@@ -2,32 +2,33 @@ import json
 from datetime import datetime
 
 
-class ComicBookInfo:
+class ComicBookInfo(object):
     @staticmethod
     def from_issue(issue):
         cbi = ComicBookInfo()
         cbi.last_modified = datetime.strptime(
-                issue['version'],
+                issue.version,
                 '%Y%m%d%H%M%S'
                 )
-        cbi.series = issue['series_title']
-        cbi.title = issue['title']
-        cbi.publisher = issue['publisher']
-        cbi.publication_month = issue['print_publish_date']['month']
-        cbi.publication_year = issue['print_publish_date']['year']
-        cbi.comments = issue['synopsis']
-        if 'num' in issue and issue['num']:
-            cbi.issue = issue['num']
-        if 'volume_num' in issue and issue['volume_num']:
-            cbi.volume = issue['volume_num']
-        if 'writers' in issue:
-            cbi.writers = issue['writers']
-        if 'pencillers' in issue:
-            cbi.pencillers = issue['pencillers']
-        if 'inkers' in issue:
-            cbi.inkers = issue['inkers']
-        if 'artists' in issue:
-            cbi.artists = issue['artists']
+        cbi.series = issue.series_title
+        cbi.title = issue.title
+        cbi.publisher = issue.publisher
+        cbi.comments = issue.synopsis
+        if issue.num:
+            cbi.issue = issue.num
+        if issue.volume_num:
+            cbi.volume = issue.volume_num
+        if issue.print_publish_date:
+            cbi.publication_month = issue.print_publish_date.month
+            cbi.publication_year = issue.print_publish_date.year
+        if 'writers' in issue.creators:
+            cbi.writers = issue.creators['writers']
+        if 'pencillers' in issue.creators:
+            cbi.pencillers = issue.creators['pencillers']
+        if 'inkers' in issue.creators:
+            cbi.inkers = issue.creators['inkers']
+        if 'artists' in issue.creators:
+            cbi.artists = issue.creators['artists']
         return cbi
 
     def __init__(self, title='', issue=-1):

@@ -3,32 +3,51 @@ import os.path
 import pprint
 import re
 import sys
+from flask import g
 from flask.ext.script import prompt, prompt_pass
+from auth import UserAccount, get_service_class
 from clf import manager
 from cbz import CbzBuilder, CbzLibrary, get_issue_version
-from comixology import ComicsAccount, get_display_title
+
+
+# Command functions
+
+@manager.command
+def login(username, password=None, service='comixology'):
+    ''' Logs into a comicbook store provider (e.g. Comixology).
+    '''
+    if service is None:
+        service = prompt('service')
+    if username is None:
+        username = prompt('username (on %s)' % str(service))
+    if password is None:
+        password = prompt_pass('password (on %s)' % str(service))
+    service_class = get_service_class(service)
+    service_account = service_class(username)
+    service_account.login(password)
+
+    account = _get_account()
+    account.services[service] = service_account
+    account.save()
 
 
 @manager.command
-def login(username, password=None):
-    ''' Logs into a comicbook store provider (e.g. Comixology).
+def use(service=None):
+    ''' Switches all commands to another service
     '''
-    if username is None:
-        username = prompt('Username:')
-    if password is None:
-        password = prompt_pass('Password:')
-    account = ComicsAccount(username)
-    account.login(password)
-    cookie = account.get_cookie()
-    with open(os.path.expanduser('~/.clf_session'), 'w') as f:
-        f.write(json.dumps(cookie))
+    account = _get_account()
+    if service is None:
+        print "Using: %s" % account.current_service_name
+    else:
+        account.current_service_name = service
+        print "Switched to: %s" % service
 
 
 @manager.command
 def list(query=None, series_id=None):
     ''' Lists series or issues.
     '''
-    account = _get_account()
+    account = _get_current_service()
     pattern = None
     if query:
         pattern = query.strip('\'" ')
@@ -36,27 +55,28 @@ def list(query=None, series_id=None):
     if series_id:
         series = account.get_series(series_id)
         for issue in series:
-            if pattern and not re.search(pattern, issue['title'], re.IGNORECASE):
+            if pattern and not re.search(pattern, issue.title, re.IGNORECASE):
                 continue
-            print "[%s] %s" % (issue['comic_id'], get_display_title(issue))
+            print "[%s] %s" % (issue.comic_id, issue.display_title)
     else:
         collection = account.get_collection()
         for series in collection:
-            series_title = get_display_title(series)
+            series_title = series.display_title
             if pattern and not re.search(pattern, series_title, re.IGNORECASE):
                 continue
-            print "[%s] %s (%s)" % (series['series_id'], series_title, series['issue_count'])
+            print "[%s] %s (%s)" % (series.series_id, series_title, series.issue_count)
 
 
 @manager.command
 def download(issue_id, output, metadata_only=False):
     ''' Downloads comicbook issues.
     '''
-    account = _get_account()
+    account = _get_current_service()
     issue = account.get_issue(issue_id)
-    print "[%s] %s" % (issue['comic_id'], get_display_title(issue))
+    print "[%s] %s" % (issue.comic_id, issue.display_title)
     
-    builder = CbzBuilder(account)
+    builder = CbzBuilder()
+    builder.set_watermark(account.service_name, account.username)
     out_path = output.strip('\'" ')
     if metadata_only:
         builder.update(out_path, issue)
@@ -70,16 +90,17 @@ def update(lib_dir, series_id=None, metadata_only=False):
     '''
     out_path = lib_dir.strip('\'" ')
     library = CbzLibrary(out_path)
-    account = _get_account()
-    builder = CbzBuilder(account)
+    account = _get_current_service()
+    builder = CbzBuilder()
+    builder.set_watermark(account.service_name, account.username)
 
     issues = account.get_all_issues(series)
     for issue in issues:
-        prefix = "[%s] %s" % (issue['comic_id'], get_display_title(issue))
+        prefix = "[%s] %s" % (issue.comic_id, issue.display_title)
         path = library.get_issue_path(issue)
         if os.path.isfile(path):
             local_version = int(get_issue_version(path))
-            remote_version = int(issue['version'])
+            remote_version = int(issue.version)
             if remote_version > local_version:
                 print "%s: updating issue (%d[remote] > %d[local])" % (prefix, remote_version, local_version)
                 if metadata_only:
@@ -97,29 +118,37 @@ def update(lib_dir, series_id=None, metadata_only=False):
 
 @manager.command
 def purchases():
-    ''' Lists recent purchases in registered comicbook stores.
+    ''' Lists recent purchases in the current comicbook store.
     '''
-    account = _get_account()
+    account = _get_current_service()
     purchases = account.get_recent_purchases()
     for p in purchases:
-        print "[%s] %s #%s" % (p['comic_id'], p['title'], p['num'])
+        print "[%s] %s" % (p.comic_id, p.display_title)
 
 
 @manager.command
 def print_issue(issue_id):
     ''' Prints information about a comicbook issue.
     '''
-    account = _get_account()
+    account = _get_current_service()
     issue = account.get_issue(args.issue_id)
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(issue)
 
 
-def _get_account(path=os.path.expanduser('~/.clf_session')):
-    with open(path, 'r') as f:
-        cookie_str = f.read()
-    cookie = json.loads(cookie_str)
-    return ComicsAccount.from_cookie(cookie)
+# Helper functions
+
+def _get_account():
+    try:
+        return UserAccount.load()
+    except:
+        print "Creating new CLF session."
+        return UserAccount()
+
+
+def _get_current_service():
+    u = _get_account()
+    return u.current_service
 
 
 def _print_progress(value):

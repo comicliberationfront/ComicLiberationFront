@@ -27,7 +27,7 @@ def get_issue_version(path):
     return cbi['x-ComicLiberationFront']['version']
 
 
-class CbzLibrary:
+class CbzLibrary(object):
     def __init__(self, root_path):
         self.root_path = root_path
 
@@ -43,29 +43,39 @@ class CbzLibrary:
         return files
 
     def get_issue_path(self, issue):
-        if not issue['title'] or not issue['series_title']:
+        if not issue.title or not issue.series_title:
             raise Exception("Can't build comic path without a title for the issue and series.")
 
-        if not issue['num']:
-            filename = "%s.cbz" % issue['title']
+        if not issue.num:
+            filename = "%s.cbz" % issue.title
+        elif isinstance(issue.num, int):
+            filename = "%s %02d.cbz" % (issue.title, int(issue.num))
         else:
-            filename = "%s %02d.cbz" % (issue['title'], int(issue['num']))
+            filename = "%s %s.cbz" % (issue.title, issue.num)
         filename = _clean_path(filename)
         
-        dirname = _clean_path(issue['series_title'])
-        if 'volume_num' in issue and issue['volume_num']:
-            dirname += '%sVolume %02d' % (os.sep, int(issue['volume_num']))
-            if 'volume_title' in issue and issue['volume_title']:
-                dirname += ' - %s' % _clean_path(issue['volume_title'])
-        elif 'volume_title' in issue and issue['volume_title']:
-            dirname += '%s%s' % (os.sep, _clean_path(issue['volume_title']))
+        dirname = _clean_path(issue.series_title)
+        if issue.volume_num:
+            if isinstance(issue.volume_num, int):
+                dirname += '%sVolume %02d' % (os.sep, int(issue.volume_num))
+            else:
+                dirname += '%sVolume %s' % (os.sep, issue.volume_num)
+            if issue.volume_title:
+                dirname += ' - %s' % _clean_path(issue.volume_title)
+        elif issue.volume_title:
+            dirname += '%s%s' % (os.sep, _clean_path(issue.volume_title))
         
         return os.path.join(self.root_path, dirname, filename)
 
 
-class CbzBuilder:
-    def __init__(self, account):
-        self.account = account
+class CbzBuilder(object):
+    def __init__(self):
+        self.username = None
+        self.service = None
+
+    def set_watermark(self, service, username):
+        self.service = service
+        self.username = username
 
     def update(self, out_path, issue, add_folder_structure=False):
         if add_folder_structure:
@@ -95,7 +105,7 @@ class CbzBuilder:
             lib = CbzLibrary(out_path)
             out_path = lib.get_issue_path(issue)
 
-        temp_folder = os.path.join(os.path.dirname(out_path), '__clf_download', issue['comic_id'])
+        temp_folder = os.path.join(os.path.dirname(out_path), '__clf_download', issue.comic_id)
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
 
@@ -104,19 +114,19 @@ class CbzBuilder:
 
         print "Downloading pages..."
         page_files = []
-        page_count = len(issue['pages']) + 1  # plus the cover
+        page_count = len(issue.pages) + 1  # plus the cover
         if subscriber:
             subscriber(0)
 
         page_files.append(os.path.join(temp_folder, '0000_cover.jpg'))
-        urllib.urlretrieve(issue['cover'], page_files[-1])
+        urllib.urlretrieve(issue.cover_url, page_files[-1])
         if subscriber:
             subscriber(100.0 / page_count)
 
-        for idx, page in enumerate(issue['pages']):
+        for idx, page in enumerate(issue.pages):
             page_num = idx + 1
             page_files.append(os.path.join(temp_folder, '%04d.jpg' % page_num))
-            urllib.urlretrieve(page['uri'], page_files[-1])
+            urllib.urlretrieve(page.url, page_files[-1])
             if subscriber:
                 subscriber(100.0 * (page_num + 1) / page_count)
 
@@ -140,13 +150,22 @@ class CbzBuilder:
             print "The comic has however been successfully downloaded."
 
     def _get_metadata(self, issue):
+        ci_notes = "Tool: ComicLiberationFront/0.1.0\n"
+        cbi_extra = {
+                'version': issue.version
+                }
+        if self.service:
+            ci_notes += "Service: %s\n" % self.service
+            cbi_extra['service'] = self.service
+        if self.username:
+            ci_notes += "Owner: %s\n" % self.username
+            cbi_extra['owner'] = self.username
+
         ci = comicrack.ComicInfo.from_issue(issue)
-        ci.notes = "Tool: ComicLiberationFront/0.1.0, Owner: %s" % self.account.username
+        ci.notes = ci_notes
 
         cbi = comicbookinfo.ComicBookInfo.from_issue(issue)
-        cbi.extra['x-ComicLiberationFront'] = {
-                'owner': self.account.username,
-                'version': issue['version']
-                }
+        cbi.extra['x-ComicLiberationFront'] = cbi_extra
+
         return (ci, cbi)
 

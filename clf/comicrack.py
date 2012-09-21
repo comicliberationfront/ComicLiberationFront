@@ -2,39 +2,40 @@ import string
 from lxml import etree
 
 
-class ComicInfo:
+class ComicInfo(object):
     @staticmethod
     def from_issue(issue):
         ci = ComicInfo()
-        ci.title = issue['title']
-        ci.series = issue['series_title']
-        if issue['num']:
-            ci.number = issue['num']
-        ci.summary = issue['synopsis']
-        ci.year = issue['print_publish_date']['year']
-        ci.month = issue['print_publish_date']['month']
-        if 'writers' in issue:
-            ci.writers = issue['writers']
-        if 'pencillers' in issue:
-            ci.pencillers = issue['pencillers']
-        if 'inkers' in issue:
-            ci.inkers = issue['inkers']
-        if 'artists' in issue:
+        ci.title = issue.title
+        ci.series = issue.series_title
+        ci.summary = issue.synopsis
+        if issue.num:
+            ci.number = issue.num
+        if issue.print_publish_date:
+            ci.year = issue.print_publish_date.year
+            ci.month = issue.print_publish_date.month
+        if 'writers' in issue.creators:
+            ci.writers = issue.creators['writers']
+        if 'pencillers' in issue.creators:
+            ci.pencillers = issue.creators['pencillers']
+        if 'inkers' in issue.creators:
+            ci.inkers = issue.creators['inkers']
+        if 'artists' in issue.creators:
             if not ci.pencillers:
                 ci.pencillers = []
             if not ci.inkers:
                 ci.inkers = []
-            for a in issue['artists']:
+            for a in issue.creators['artists']:
                 ci.pencillers.append(a)
                 ci.inkers.append(a)
-        ci.publisher = issue['publisher']
-        ci.imprint = issue['imprint']
-        ci.web = 'http://www.comixology.com/digital-comic/%s' % issue['comic_id']
-        for i, p in enumerate(issue['pages']):
+        ci.publisher = issue.publisher
+        ci.imprint = issue.imprint
+        ci.web = 'http://www.comixology.com/digital-comic/%s' % issue.comic_id
+        for i, p in enumerate(issue.pages):
             pi = PageInfo(i)
-            pi.size = p['size']
-            pi.width = p['width']
-            pi.height = p['height']
+            pi.size = p.size
+            pi.width = p.width
+            pi.height = p.height
             ci.pages.append(pi)
 
         return ci
@@ -143,7 +144,7 @@ class ComicInfo:
         return root
 
 
-class PageInfo:
+class PageInfo(object):
     FRONT_COVER = 'FrontCover'
     INNER_COVER = 'InnerCover'
     ROUNDUP = 'Roundup'
