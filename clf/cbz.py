@@ -48,18 +48,21 @@ class CbzLibrary(object):
 
         if not issue.num:
             filename = "%s.cbz" % issue.title
-        elif isinstance(issue.num, int):
-            filename = "%s %02d.cbz" % (issue.title, int(issue.num))
         else:
-            filename = "%s %s.cbz" % (issue.title, issue.num)
+            try:
+                issue_num = "%02d" % int(issue.num)
+            except ValueError:
+                issue_num = issue.num
+            filename = "%s %s.cbz" % (issue.title, issue_num)
         filename = _clean_path(filename)
         
         dirname = _clean_path(issue.series_title)
         if issue.volume_num:
-            if isinstance(issue.volume_num, int):
-                dirname += '%sVolume %02d' % (os.sep, int(issue.volume_num))
-            else:
-                dirname += '%sVolume %s' % (os.sep, issue.volume_num)
+            try:
+                volume_num = "%02d" % int(issue.volume_num)
+            except ValueError:
+                volume_num = issue.volume_num
+            dirname += '%sVolume %s' % (os.sep, volume_num)
             if issue.volume_title:
                 dirname += ' - %s' % _clean_path(issue.volume_title)
         elif issue.volume_title:
