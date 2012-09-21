@@ -36,9 +36,10 @@ $(document).ready(function(){
     }
 
     $('a.download').click(function(){
+        var servicename = $(this).attr('data-service')
         var seriesid = $(this).attr('data-seriesid')
         var comicid = $(this).attr('data-comicid')
-        $.getJSON('/download/'+seriesid+'/'+comicid)
+        $.getJSON('/download/'+servicename+'/'+seriesid+'/'+comicid)
 
         // The current download will take a bit of time to show-up
         // on the server so let's start showing the progress after 1 second.

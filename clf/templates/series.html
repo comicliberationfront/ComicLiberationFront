@@ -1,12 +1,11 @@
 {% extends 'layout.html' %}
 
+{% block nav %}
+<li><a href="{{ url_for('index') }}">Back</a></li>
+<li><a href="{{ url_for('download', service_name=service_name, series_id=series_id) }}">Download all issues</a></li>
+{% endblock %}
+
 {% block content %}
-<div>
-    <p>
-        <a href="{{ url_for('index') }}">Back</a> &ndash; 
-        <a href="{{ url_for('download', series_id=series_id) }}">Download all issues</a>
-    </p>
-</div>
 <div class="grids">
     {% for issue in series %}
     <div class="grid-2">
@@ -14,11 +13,14 @@
     </div>
     <div class="grid-2">
         <p class="issue-title"><a href="{{ issue.url }}">{{ issue.display_title }}</a></p>
+        <p>
         {% if issue.downloaded %}
-        <p>Downloaded (<a class="download" data-seriesid="{{ series_id }}" data-comicid="{{ issue.comic_id }}" href="#">Download&nbsp;Again</a>)</p>
+        Downloaded (<a class="download" data-service="{{ service_name }}" data-seriesid="{{ series_id }}" data-comicid="{{ issue.comic_id }}" href="#">Download&nbsp;Again</a>)
         {% else %}
-        <p><a class="download" data-seriesid="{{ series_id }}" data-comicid="{{ issue.comic_id }}" href="#">Download</a></p>
+        <a class="download" data-service="{{ service_name }}" data-seriesid="{{ series_id }}" data-comicid="{{ issue.comic_id }}" href="#">Download</a>
         {% endif %}
+        <span class="ui-icon ui-icon-info" title="{{ issue.path }}"></span>
+        
     </div>
     {% endfor %}
 </div>

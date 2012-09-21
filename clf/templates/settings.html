@@ -1,0 +1,27 @@
+{% extends 'layout.html' %}
+
+{% block nav %}
+<li><a href="{{ url_for('index') }}">Back</a></li>
+{% endblock %}
+
+{% block content %}
+<h2>Preferences</h2>
+<form action="" method="post">
+    <p><label for="library_path">Library Root</label>: <input type="text" name="library_path" value="{{ library_path }}" /></p>
+    <p><input type="submit" value="Update" /></p>
+</form>
+
+<h2>Services</h2>
+{% if services %}
+<ul>
+    {% for s in services %}
+    <li>{{ s }}</li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No connected services</p>
+{% endif %}
+
+<h2>Add services</h2>
+<p><a href="{{ url_for('service_login', service_name='comixology') }}">Comixology</a></p>
+{% endblock %}

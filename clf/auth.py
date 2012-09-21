@@ -55,6 +55,18 @@ class UserAccount(object):
             raise AttributeError("No such service: %s" % attr)
         return self.services[attr]
 
+    def set_caches(self, cache):
+        for n, s in self.services.iteritems():
+            s.cache = cache
+
+    def get_collections(self):
+        for n, s in self.services.iteritems():
+            c = {
+                    'service': s,
+                    'collection': s.get_collection()
+                    }
+            yield c
+
     @staticmethod
     def load(path=None):
         if path is None:
