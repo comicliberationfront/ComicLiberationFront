@@ -19,10 +19,11 @@ COMIXOLOGY_API_VERSION = '3.0'
 
 class ComicsAccount(object):
     service_name = 'comixology'
+    service_label = 'Comixology'
 
-    def __init__(self, username, api_name='ios'):
+    def __init__(self, username, password=None, api_name='ios'):
         self.username = username
-        self.password = None
+        self.password = password
         self.email = None
         self.api_name = api_name
         self.cache = DummyCache()
@@ -267,7 +268,6 @@ class ComicsAccount(object):
             account.api_name = cookie['api_name']
         else:
             account.api_name = 'windows8'
-        print "Loaded session for '%s' (%s)." % (account.username, account.email)
         return account
 
 
