@@ -5,11 +5,11 @@ from flask import g, redirect, url_for, request, render_template, flash
 from auth import UserAccount, get_service_class
 from cache import Cache, DummyCache
 from cbz import CbzLibrary, CbzBuilder
-from clf import app
+from clf import app, cache_dir
 
 
 # Globals
-cache = Cache(os.path.join(os.path.dirname(__file__), 'cache'))
+cache = Cache(cache_dir)
 active_downloads = {}
 
 
@@ -148,17 +148,23 @@ def do_download(service_name, comic_id, account):
     issue = service.get_issue(comic_id)
     active_downloads[comic_id] = {
             'title': '%s #%s' % (issue.title, issue.num),
+            'message': '',
             'progress': 0
             }
 
-    def on_cbz_progress(progress):
-        active_downloads[comic_id]['progress'] = progress
+    def on_cbz_progress(value=None, message=None, error=None):
+        if value is not None:
+            active_downloads[comic_id]['progress'] = value
+        if message is not None:
+            active_downloads[comic_id]['message'] = message
+        if error is not None:
+            active_downloads[comic_id]['message'] = "ERROR: " + error
 
     try:
         builder = CbzBuilder()
         builder.set_watermark(service_name, service.username)
         app.logger.debug('Downloading %s [%s] to: %s' % (issue.title, comic_id, account.library_path))
-        builder.save(account.library_path, issue, subscriber=on_cbz_progress, add_folder_structure=True)
+        builder.save(account.library_path, issue, temp_folder=cache_dir, subscriber=on_cbz_progress, add_folder_structure=True)
     except Exception as e:
         app.logger.error('Error downloading comic: %s' % e)
     finally:

@@ -10,6 +10,9 @@ from comixology import ComicsAccount
 SERVICE_CLASSES = { 'comixology': ComicsAccount }
 
 
+def get_service_classes():
+    return [v for k, v in SERVICE_CLASSES.iteritems()]
+
 def get_service_class(service):
     return SERVICE_CLASSES[service]
 
@@ -18,27 +21,6 @@ class UserAccount(object):
     def __init__(self):
         self.library_path = os.path.expanduser('~/Comicbooks')
         self.services = {}
-        self._current_service_name = None
-
-    @property
-    def current_service(self):
-        if self.current_service_name is None:
-            return None
-        return self.services[self.current_service_name]
-
-    @property
-    def current_service_name(self):
-        if self._current_service_name is None:
-            if len(self.services) == 0:
-                return None
-            self._current_service_name = self.services.keys()[0]
-        return self._current_service_name
-
-    @current_service_name.setter
-    def current_service_name(self, value):
-        if value not in self.services:
-            raise Exception("No such service: %s" % value)
-        self._current_service_name = value
 
     def save(self, path=None):
         account = { 'library_path': self.library_path, 'cookies': {} }
@@ -66,6 +48,7 @@ class UserAccount(object):
                     'collection': s.get_collection()
                     }
             yield c
+
 
     @staticmethod
     def load(path=None):

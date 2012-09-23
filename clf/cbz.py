@@ -103,54 +103,63 @@ class CbzBuilder(object):
         os.remove(out_path + '.old')
 
 
-    def save(self, out_path, issue, add_folder_structure=False, subscriber=None):
+    def save(self, out_path, issue, add_folder_structure=False, temp_folder=None, subscriber=None):
         if add_folder_structure:
             lib = CbzLibrary(out_path)
             out_path = lib.get_issue_path(issue)
 
-        temp_folder = os.path.join(os.path.dirname(out_path), '__clf_download', issue.comic_id)
+        if temp_folder is None:
+            temp_folder = os.path.dirname(out_path)
+        temp_folder = os.path.join(temp_folder, '__clf_download', issue.comic_id)
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
 
-        print "Creating metadata..."
+        out_dir = os.path.dirname(out_path)
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+
+        if subscriber:
+            subscriber(message="Creating metadata...")
         ci, cbi = self._get_metadata(issue)
 
-        print "Downloading pages..."
+        if subscriber:
+            subscriber(message="Downloading pages...")
         page_files = []
         page_count = len(issue.pages) + 1  # plus the cover
         if subscriber:
-            subscriber(0)
+            subscriber(value=0)
 
         page_files.append(os.path.join(temp_folder, '0000_cover.jpg'))
         urllib.urlretrieve(issue.cover_url, page_files[-1])
         if subscriber:
-            subscriber(100.0 / page_count)
+            subscriber(value=(100.0 / page_count))
 
         for idx, page in enumerate(issue.pages):
             page_num = idx + 1
             page_files.append(os.path.join(temp_folder, '%04d.jpg' % page_num))
             urllib.urlretrieve(page.url, page_files[-1])
             if subscriber:
-                subscriber(100.0 * (page_num + 1) / page_count)
+                subscriber(value=(100.0 * (page_num + 1) / page_count))
 
         if subscriber:
-            subscriber(100)
+            subscriber(message=("Creating CBZ: %s..." % out_path))
             
-        print "Creating CBZ: %s..." % out_path
         with zipfile.ZipFile(out_path, 'w') as zf:
             zf.writestr('ComicInfo.xml', unicode(str(ci), 'utf-8'))
             for name in page_files:
                 zf.write(name, os.path.basename(name))
             zf.comment = cbi.get_json_str()
 
-        print "Cleaning up..."
+        if subscriber:
+            subscriber(message="Cleaning up...")
         try:
             for name in page_files:
                 os.remove(name)
             os.rmdir(temp_folder)
         except Exception as e:
-            print "Error while cleaning up: %s" % e
-            print "The comic has however been successfully downloaded."
+            message = ("Error while cleaning up: %s\nThe comic has however been successfully downloaded." % e)
+            if subscriber:
+                subscriber(error=message)
 
     def _get_metadata(self, issue):
         ci_notes = "Tool: ComicLiberationFront/0.1.0\n"
