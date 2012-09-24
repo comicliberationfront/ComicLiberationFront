@@ -80,12 +80,32 @@ def series(service_name, series_id):
 @app.route('/download/<service_name>/<int:series_id>', defaults={'comic_id': None})
 @app.route('/download/<service_name>/<int:series_id>/<int:comic_id>')
 def download(service_name, series_id, comic_id):
-    app.logger.debug('Received download request for [%s]' % comic_id)
     if not comic_id in active_downloads:
         thread.start_new_thread(do_download, (service_name, comic_id, g.account))
     return json.dumps({
         'status': 'ok'
         })
+
+
+@app.route('/sync', defaults={'service_name': None, 'series_id': None})
+@app.route('/sync/<service_name>', defaults={'series_id': None})
+@app.route('/sync/<service_name>/<series_id>')
+def sync(service_name, series_id):
+    if service_name is None:
+        services = [v for k, v in g.account.services.iteritems()]
+    else:
+        services = [g.account.services[service_name]]
+
+    library = CbzLibrary(g.account.library_path)
+    builder = CbzBuilder()
+    builder.set_temp_folder(cache_dir)
+    # TODO: progress subscriber
+    for service in services:
+        builder.set_watermark(service.service_name, service.username)
+
+        # Get all issues for the given series, or all issues ever if `None`.
+        issues = service.get_all_issues(series_id)
+        library.sync_issues(builder, issues) 
 
 
 @app.route('/downloads')
@@ -161,10 +181,13 @@ def do_download(service_name, comic_id, account):
             active_downloads[comic_id]['message'] = "ERROR: " + error
 
     try:
+        library = CbzLibrary(g.account.library_path)
         builder = CbzBuilder()
         builder.set_watermark(service_name, service.username)
+        builder.set_temp_folder(cache_dir)
+        builder.set_progress_subscriber(on_cbz_progress)
         app.logger.debug('Downloading %s [%s] to: %s' % (issue.title, comic_id, account.library_path))
-        builder.save(account.library_path, issue, temp_folder=cache_dir, subscriber=on_cbz_progress, add_folder_structure=True)
+        builder.save(issue, in_library=library)
     except Exception as e:
         app.logger.error('Error downloading comic: %s' % e)
     finally:

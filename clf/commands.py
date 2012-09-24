@@ -97,20 +97,26 @@ def download(service_name, issue_id, output, metadata_only=False):
     
     builder = CbzBuilder()
     builder.set_watermark(service.service_name, service.username)
+    builder.set_progress_subscriber(_print_download_progress)
+    builder.set_temp_folder(cache_dir)
     out_path = output.strip('\'" ')
     if metadata_only:
-        builder.update(out_path, issue)
+        builder.update(issue, out_path=path)
     else:
-        builder.save(out_path, issue, temp_folder=cache_dir, subscriber=_print_progress)
+        builder.save(issue, out_path=out_path, subscriber=_print_sync_progress)
 
 
-@manager.option('lib_dir', nargs='?', default=None)
+@manager.option('query', nargs='?', default=None)
 @manager.option('-s', '--service', dest='service_name', default=None)
 @manager.option('-i', '--id', dest='series_id', default=None)
 @manager.option('-m', '--metadata-only', dest='metadata_only', default=False, action='store_true')
-def update(lib_dir=None, service_name=None, series_id=None, metadata_only=False):
-    ''' Updates the local comicbook library.
+@manager.option('--library_dir', dest='lib_dir', default=None)
+def sync(query=None, service_name=None, series_id=None, metadata_only=False, lib_dir=None):
+    ''' Synchronizes the local comicbook library with the connected or specified services.
     '''
+    if query is not None and series_id is not None:
+        raise Exception("Can't specify both a query and a series ID.")
+
     service = _get_service_safe(service_name)
 
     if lib_dir is None:
@@ -118,30 +124,32 @@ def update(lib_dir=None, service_name=None, series_id=None, metadata_only=False)
         lib_dir = account.library_path
     out_path = lib_dir.strip('\'" ')
     library = CbzLibrary(out_path)
+
+    if series_id is None:
+        if query is None:
+            print "Getting all issues from %s..." % service.service_label
+            issues = service.get_all_issues()
+        else:
+            issues = []
+            query = query.strip('\'" ')
+            collection = service.get_collection()
+            for series in collection:
+                if not re.search(query, series.display_title, re.IGNORECASE):
+                    continue
+                print "Getting issues from %s for: %s" % (service.service_label, series.display_title)
+                issues += service.get_all_issues(series.series_id)
+    else:
+        print "Getting issues from %s for series ID %s" % (service.service_label, series_id)
+        issues = service.get_all_issues(series_id)
+
+    print "Syncing issues..."
     builder = CbzBuilder()
     builder.set_watermark(service.service_name, service.username)
-
-    issues = service.get_all_issues(series_id)
-    for issue in issues:
-        prefix = "[%s] %s" % (issue.comic_id, issue.display_title)
-        path = library.get_issue_path(issue)
-        if os.path.isfile(path):
-            local_version = int(get_issue_version(path))
-            remote_version = int(issue.version)
-            if remote_version > local_version:
-                print "%s: updating issue (%d[remote] > %d[local])" % (prefix, remote_version, local_version)
-                if metadata_only:
-                    print "(metadata only)"
-                    builder.update(out_path, issue, add_folder_structure=True)
-                else:
-                    os.rename(path, path + '.old')
-                    builder.save(out_path, issue, temp_folder=cache_dir, subscriber=_print_progress, add_folder_structure=True)
-                    os.remove(path + '.old')
-            else:
-                print "%s: up-to-date (%d[remote] <= %d[local])" % (prefix, remote_version, local_version)
-        else:
-            print "%s: downloading" % prefix
-            builder.save(out_path, issue, temp_folder=cache_dir, subscriber=_print_progress, add_folder_structure=True)
+    builder.set_progress_subscriber(_print_download_progress)
+    builder.set_temp_folder(cache_dir)
+    library.sync_issues(builder, issues, 
+            metadata_only=metadata_only, 
+            subscriber=_print_sync_progress) 
 
 
 @manager.command
@@ -155,13 +163,13 @@ def purchases(service_name=None):
 
 
 @manager.command
-def print_issue(service_name, issue_id):
+def print_issue(issue_id, service_name=None):
     ''' Prints information about a comicbook issue.
     '''
     service = _get_service_safe(service_name)
-    issue = service.get_issue(args.issue_id)
+    issue = service.get_issue(issue_id)
     pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(issue)
+    pp.pprint(issue.__dict__)
 
 
 # Helper functions
@@ -210,16 +218,29 @@ def _get_service_safe(service_name, message="Choose the service for this command
     except KeyError:
         raise Exception("No such service: %s" % service_name)
 
-def _print_progress(value=None, message=None, error=None):
+
+def _filter_series(service, query, series_id):
+
+    pass
+
+
+def _print_download_progress(value=None, message=None, error=None):
     if error is not None:
-        sys.stdout.write("ERROR: %s\n" % error)
-    if message is not None:
-        sys.stdout.write(message + "\n")
+        print "ERROR: %s" % error
     if value is not None:
         sys.stdout.write("\r")
         if value < 100:
-            sys.stdout.write("    %02d%%" % value)
+            sys.stdout.write(" %02d%% " % value)
         else:
-            sys.stdout.write("    100%\n")
+            sys.stdout.write(" 100%\n")
+        if message is not None:
+            sys.stdout.write(message)
     sys.stdout.flush()
+
+
+def _print_sync_progress(message=None, error=None):
+    if error is not None:
+        print "ERROR: %s" % error
+    if message is not None:
+        print message
 

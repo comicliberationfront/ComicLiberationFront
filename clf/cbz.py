@@ -12,7 +12,7 @@ import comicbookinfo
 valid_path_chars = "-_.() /\\%s%s" % (string.ascii_letters, string.digits)
 
 def _clean_path(path):
-    return re.sub('[^\w\d &\-_\.\(\)/\\\\]', '-', path)
+    return re.sub('[^\w\d &\-_\.\(\)\'/\\\\]', '-', path)
 
 
 def get_issue_version(path):
@@ -70,25 +70,76 @@ class CbzLibrary(object):
         
         return os.path.join(self.root_path, dirname, filename)
 
+    def sync_issues(self, builder, issues, 
+            metadata_only=False, 
+            force=False,
+            subscriber=None):
+        for i, issue in enumerate(issues):
+            prefix = "[%s] %s" % (issue.comic_id, issue.display_title)
+            path = self.get_issue_path(issue)
+            if os.path.isfile(path):
+                do_sync = False
+                do_sync_reason = None
+                if force:
+                    do_sync = True
+                    do_sync_reason = 'forced'
+                else:
+                    local_version = int(get_issue_version(path))
+                    remote_version = int(issue.version)
+                    if remote_version > local_version:
+                        do_sync = True
+                        do_sync_reason = '%d[remote] > %d[local]' % (remote_version, local_version)
+                    else:
+                        do_sync_reason = '%d[remote] <= %d[local]' % (remote_version, local_version)
+
+                if do_sync:
+                    if subscriber is not None:
+                        subscriber(message="%s: syncing issue (reason: %s)" % (prefix, remote_version, local_version, do_sync_reason))
+                    if metadata_only:
+                        builder.update(issue, in_library=self)
+                    else:
+                        os.rename(path, path + '.old')
+                        builder.save(issue, in_library=self)
+                        os.remove(path + '.old')
+                else:
+                    if subscriber is not None:
+                        subscriber(message="%s: up-to-date (%s)" % (prefix, do_sync_reason))
+            elif not metadata_only:
+                if subscriber is not None:
+                    subscriber(message="%s: downloading (new)" % prefix)
+                builder.save(issue, in_library=self)
+
 
 class CbzBuilder(object):
     def __init__(self):
         self.username = None
         self.service = None
+        self.subscriber = None
+        self.temp_folder = None
 
     def set_watermark(self, service, username):
         self.service = service
         self.username = username
 
-    def update(self, out_path, issue, add_folder_structure=False):
-        if add_folder_structure:
-            lib = CbzLibrary(out_path)
-            out_path = lib.get_issue_path(issue)
+    def set_progress_subscriber(self, subscriber):
+        self.subscriber = subscriber
 
-        print "Re-creating metadata..."
+    def set_temp_folder(self, temp_folder):
+        self.temp_folder = temp_folder
+
+    def update(self, issue, out_path=None, in_library=None):
+        if out_path is None:
+            if in_library is not None:
+                out_path = in_library.get_issue_path(issue)
+            else:
+                raise Exception("You must specify either an output path or a library.")
+
+        if self.subscriber is not None:
+            self.subscriber(value=0, message="Re-creating metadata...")
         ci, cbi = self._get_metadata(issue)
 
-        print "Updating CBZ: %s..." % out_path
+        if self.subscriber is not None:
+            self.subscriber(value=30, message=("Updating CBZ: %s..." % out_path))
         os.rename(out_path, out_path + '.old')
         with zipfile.ZipFile(out_path + '.old', 'a') as zfin:
             with zipfile.ZipFile(out_path, 'w') as zfout:
@@ -99,15 +150,21 @@ class CbzBuilder(object):
                         zfout.writestr(info, zfin.read(info.filename))
                 zfout.comment = cbi.get_json_str()
 
-        print "Cleaning up..."
+        if self.subscriber is not None:
+            self.subscriber(value=60, message="Cleaning up...")
         os.remove(out_path + '.old')
+        if self.subscriber is not None:
+            self.subscriber(value=100)
 
 
-    def save(self, out_path, issue, add_folder_structure=False, temp_folder=None, subscriber=None):
-        if add_folder_structure:
-            lib = CbzLibrary(out_path)
-            out_path = lib.get_issue_path(issue)
+    def save(self, issue, out_path=None, in_library=None):
+        if out_path is None:
+            if in_library is not None:
+                out_path = in_library.get_issue_path(issue)
+            else:
+                raise Exception("You must specify either an output path or a library.")
 
+        temp_folder = self.temp_folder
         if temp_folder is None:
             temp_folder = os.path.dirname(out_path)
         temp_folder = os.path.join(temp_folder, '__clf_download', issue.comic_id)
@@ -118,31 +175,24 @@ class CbzBuilder(object):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
 
-        if subscriber:
-            subscriber(message="Creating metadata...")
+        if self.subscriber:
+            self.subscriber(value=0, message="Creating metadata...")
         ci, cbi = self._get_metadata(issue)
 
-        if subscriber:
-            subscriber(message="Downloading pages...")
+        if self.subscriber:
+            self.subscriber(value=0, message="Downloading pages...")
         page_files = []
-        page_count = len(issue.pages) + 1  # plus the cover
-        if subscriber:
-            subscriber(value=0)
-
-        page_files.append(os.path.join(temp_folder, '0000_cover.jpg'))
-        urllib.urlretrieve(issue.cover_url, page_files[-1])
-        if subscriber:
-            subscriber(value=(100.0 / page_count))
+        page_count = len(issue.pages)
 
         for idx, page in enumerate(issue.pages):
             page_num = idx + 1
             page_files.append(os.path.join(temp_folder, '%04d.jpg' % page_num))
             urllib.urlretrieve(page.url, page_files[-1])
-            if subscriber:
-                subscriber(value=(100.0 * (page_num + 1) / page_count))
+            if self.subscriber:
+                self.subscriber(value=(100.0 * (page_num + 1) / page_count))
 
-        if subscriber:
-            subscriber(message=("Creating CBZ: %s..." % out_path))
+        if self.subscriber:
+            self.subscriber(value=100, message=("Creating CBZ: %s..." % out_path))
             
         with zipfile.ZipFile(out_path, 'w') as zf:
             zf.writestr('ComicInfo.xml', unicode(str(ci), 'utf-8'))
@@ -150,16 +200,16 @@ class CbzBuilder(object):
                 zf.write(name, os.path.basename(name))
             zf.comment = cbi.get_json_str()
 
-        if subscriber:
-            subscriber(message="Cleaning up...")
+        if self.subscriber:
+            self.subscriber(value=100, message="Cleaning up...")
         try:
             for name in page_files:
                 os.remove(name)
             os.rmdir(temp_folder)
         except Exception as e:
             message = ("Error while cleaning up: %s\nThe comic has however been successfully downloaded." % e)
-            if subscriber:
-                subscriber(error=message)
+            if self.subscriber:
+                self.subscriber(error=message)
 
     def _get_metadata(self, issue):
         ci_notes = "Tool: ComicLiberationFront/0.1.0\n"
