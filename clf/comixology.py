@@ -143,7 +143,7 @@ class ComicsAccount(object):
     def get_series(self, series_id):
         self._check_logged_in()
 
-        result = self.cache.get('get_series/%s' % series_id)
+        result = self.cache.get('get_series_%s' % series_id)
         if result is None:
             data = {
                     'username': self.username,
@@ -176,7 +176,7 @@ class ComicsAccount(object):
     def get_issue(self, comic_id):
         self._check_logged_in()
 
-        item = self.cache.get('get_issue/%s' % comic_id)
+        item = self.cache.get('get_issue_%s' % comic_id)
         if item is None:
             data = {
                     'username': self.username,
