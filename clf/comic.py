@@ -40,6 +40,9 @@ class Issue(object):
         self.creators = {}
         self.pages = []
 
+    def __repr__(self):
+        return str(self.__dict__)
+
     @property
     def display_title(self):
         dt = self.title
@@ -59,4 +62,7 @@ class Page(object):
         self.width = 0
         self.height = 0
         self.size = 0
+
+    def __repr__(self):
+        return str(self.__dict__)
 
