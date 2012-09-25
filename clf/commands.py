@@ -6,8 +6,14 @@ import sys
 from flask import g
 from flask.ext.script import prompt, prompt_pass
 from auth import UserAccount, get_service_classes, get_service_class
+from cache import Cache
 from clf import manager, cache_dir
 from cbz import CbzBuilder, CbzLibrary, get_issue_version
+
+
+# Globals
+
+cache = Cache(cache_dir)
 
 
 # Command functions
@@ -176,10 +182,12 @@ def print_issue(issue_id, service_name=None):
 
 def _get_account():
     try:
-        return UserAccount.load()
+        ua = UserAccount.load()
     except:
         print "Creating new CLF session."
-        return UserAccount()
+        ua = UserAccount()
+    ua.set_caches(cache)
+    return ua
 
 
 def _get_service_class_safe(service_name, message="Choose the service for this command:"):
