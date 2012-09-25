@@ -95,7 +95,7 @@ class CbzLibrary(object):
 
                 if do_sync:
                     if subscriber is not None:
-                        subscriber(message="%s: syncing issue (reason: %s)" % (prefix, remote_version, local_version, do_sync_reason))
+                        subscriber(message="%s: syncing issue (reason: %s)" % (prefix, do_sync_reason))
                     if metadata_only:
                         builder.update(issue, in_library=self)
                     else:
