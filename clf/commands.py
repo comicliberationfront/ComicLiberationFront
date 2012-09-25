@@ -68,27 +68,27 @@ def login(username=None, password=None, service=None):
 @manager.option('query', nargs='?', default=None)
 @manager.option('-s', '--service', dest='service_name', default=None)
 @manager.option('-i', '--id', dest='series_id', default=None)
-def list(query=None, service_name=None, series_id=None):
+@manager.option('-p', '--path', dest='print_path', default=False, action='store_true')
+def list(query=None, service_name=None, series_id=None, print_path=False):
     ''' Lists series or issues.
     '''
     service = _get_service_safe(service_name)
+    account = _get_account()
+    library = CbzLibrary(account.library_path)
 
-    pattern = None
-    if query:
-        pattern = query.strip('\'" ')
-
-    if series_id:
-        series = service.get_series(series_id)
-        for issue in series:
-            if pattern and not re.search(pattern, issue.display_title, re.IGNORECASE):
-                continue
+    if series_id is not None:
+        issues = _get_filtered_issues(service, query, series_id)
+        for issue in issues:
             print "[%s] %s" % (issue.comic_id, issue.display_title)
+            if print_path:
+                print " > %s" % library.get_issue_path(service.get_issue(issue.comic_id))
     else:
-        collection = service.get_collection()
-        for series in collection:
-            if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
-                continue
-            print "[%s] %s (%s)" % (series.series_id, series.display_title, series.issue_count)
+        series = _get_filtered_series(service, query)
+        for s in series:
+            print "[%s] %s (%s issues)" % (s.series_id, s.display_title, s.issue_count)
+            if print_path:
+                for issue in service.get_series(s.series_id):
+                    print " > %s" % library.get_issue_path(service.get_issue(issue.comic_id))
 
 
 @manager.option('query', nargs='?', default=None)
@@ -98,30 +98,20 @@ def price(query=None, service_name=None, series_id=None):
     ''' Gives the total price of the specified series or issues.
     '''
     service = _get_service_safe(service_name)
-
-    pattern = None
-    if query:
-        pattern = query.strip('\'" ')
+    issues = _get_filtered_issues(service, query, series_id)
 
     total_price = 0
-    if series_id:
-        series = service.get_series(series_id)
-        for issue in series:
-            if pattern and not re.search(pattern, issue.display_title, re.IGNORECASE):
-                continue
-            if issue.price:
-                total_price += issue.price
-    else:
-        collection = service.get_collection()
-        for series in collection:
-            if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
-                continue
-            for issue in service.get_series(series.series_id):
-                if issue.price:
-                    total_price += issue.price
-    print "$%f" % total_price
+    paid_count = 0
+    free_count = 0
+    for issue in issues:
+        if issue.price:
+            total_price += issue.price
+            paid_count += 1
+        else:
+            free_count += 1
 
-
+    print "$%f out of %d paid issues." % (total_price, paid_count)
+    print "%d free issues." % (free_count)
     
 
 @manager.command
@@ -147,9 +137,10 @@ def download(service_name, issue_id, output, metadata_only=False):
 @manager.option('query', nargs='?', default=None)
 @manager.option('-s', '--service', dest='service_name', default=None)
 @manager.option('-i', '--id', dest='series_id', default=None)
-@manager.option('-m', '--metadata-only', dest='metadata_only', default=False, action='store_true')
+@manager.option('--new-only', dest='new_only', default=False, action='store_true')
+@manager.option('--metadata-only', dest='metadata_only', default=False, action='store_true')
 @manager.option('--library_dir', dest='lib_dir', default=None)
-def sync(query=None, service_name=None, series_id=None, metadata_only=False, lib_dir=None):
+def sync(query=None, service_name=None, series_id=None, new_only=False, metadata_only=False, lib_dir=None):
     ''' Synchronizes the local comicbook library with the connected or specified services.
     '''
     if query is not None and series_id is not None:
@@ -257,6 +248,38 @@ def _get_service_safe(service_name, message="Choose the service for this command
         return account.services[service_name]
     except KeyError:
         raise Exception("No such service: %s" % service_name)
+
+
+def _get_filtered_series(service, query=None):
+    pattern = None
+    if query:
+        pattern = query.strip('\'" ')
+
+    collection = service.get_collection()
+    for series in collection:
+        if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
+            continue
+        yield series
+
+
+def _get_filtered_issues(service, query=None, series_id=None):
+    pattern = None
+    if query:
+        pattern = query.strip('\'" ')
+
+    if series_id:
+        series = service.get_series(series_id)
+        for issue in series:
+            if pattern and not re.search(pattern, issue.display_title, re.IGNORECASE):
+                continue
+            yield issue
+    else:
+        collection = service.get_collection()
+        for series in collection:
+            if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
+                continue
+            for issue in service.get_series(series.series_id):
+                yield issue
 
 
 def _print_download_progress(value=None, message=None, error=None):

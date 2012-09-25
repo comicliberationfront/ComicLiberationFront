@@ -14,7 +14,11 @@ class Series(object):
     def display_title(self):
         dt = self.title
         if self.volume_num:
-            dt += ' Vol.%s' % self.volume_num
+            try:
+                pretty_volume_num = "%02d" % int(self.volume_num)
+            except ValueError:
+                pretty_volume_num = self.volume_num
+            dt += ' Vol.%s' % pretty_volume_num
         if self.volume_title:
             dt += ': %s' % self.volume_title
         return dt
@@ -30,6 +34,7 @@ class Issue(object):
         self.num = None
         self.volume_num = None
         self.volume_title = None
+        self.is_volume_tpb = False
         self.cover_url = None
         self.url = None
         self.publisher = None
@@ -46,13 +51,44 @@ class Issue(object):
 
     @property
     def display_title(self):
+        return self.get_display_title()
+
+    def get_display_title(self, num_sep=' #', vol_sep=': '):
         dt = self.title
-        if self.volume_num:
-            dt += ' Vol.%s' % self.volume_num
-        if self.volume_title:
-            dt += ': %s' % self.volume_title
+        vdt = self.get_volume_display_title(vol_sep)
+        if vdt is not None:
+            dt += ' ' + vdt
         if self.num:
-            dt += ' #%s' % self.num
+            try:
+                pretty_num = "%02d" % int(self.num)
+            except ValueError:
+                pretty_num = self.num
+            dt += '%s%s' % (num_sep, pretty_num)
+        return dt
+
+    @property
+    def volume_display_title(self):
+        return self.get_volume_display_title()
+
+    def get_volume_display_title(self, vol_sep=': '):
+        if self.volume_num:
+            try:
+                pretty_volume_num = "%02d" % int(self.volume_num)
+            except ValueError:
+                pretty_volume_num = self.volume_num
+            dt = 'Vol.%s' % pretty_volume_num
+            if self.volume_title:
+                dt += '%s%s' % (vol_sep, self.volume_title)
+            return dt
+        else:
+            return None
+
+    @property
+    def series_display_title(self):
+        dt = self.series_title
+        vdt = self.volume_display_title
+        if vdt is not None:
+            dt += ' ' + vdt
         return dt
 
 

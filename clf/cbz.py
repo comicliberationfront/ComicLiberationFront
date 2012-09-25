@@ -47,29 +47,15 @@ class CbzLibrary(object):
         if not issue.title or not issue.series_title:
             raise Exception("Can't build comic path without a title for the issue and series.")
 
-        if not issue.num:
-            filename = "%s.cbz" % issue.title
+        path = _clean_path(issue.series_title)
+        if issue.is_volume_tpb:
+            path += os.sep + _clean_path(issue.get_display_title(' ', ' - ')) + '.cbz'
         else:
-            try:
-                issue_num = "%02d" % int(issue.num)
-            except ValueError:
-                issue_num = issue.num
-            filename = "%s %s.cbz" % (issue.title, issue_num)
-        filename = _clean_path(filename)
-        
-        dirname = _clean_path(issue.series_title)
-        if issue.volume_num:
-            try:
-                volume_num = "%02d" % int(issue.volume_num)
-            except ValueError:
-                volume_num = issue.volume_num
-            dirname += '%sVolume %s' % (os.sep, volume_num)
-            if issue.volume_title:
-                dirname += ' - %s' % _clean_path(issue.volume_title)
-        elif issue.volume_title:
-            dirname += '%s%s' % (os.sep, _clean_path(issue.volume_title))
-        
-        return os.path.join(self.root_path, dirname, filename)
+            vdt = issue.get_volume_display_title(' - ')
+            if vdt is not None:
+                path += os.sep + _clean_path(issue.series_title + ' ' + vdt)
+            path += os.sep + _clean_path(issue.get_display_title(' ', ' - ')) + '.cbz'
+        return os.path.join(self.root_path, path)
 
     def sync_issues(self, builder, issues, 
             metadata_only=False, 

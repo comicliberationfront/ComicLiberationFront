@@ -220,6 +220,9 @@ class ComicsAccount(object):
             issue.volume_title = item_info['series']['issue_volume_title']
         if 'issue_volume_num' in item_info['series']:
             issue.volume_num = item_info['series']['issue_volume_num']
+            issue.is_volume_tpb = True
+        elif 'volume_num' in item_info['series']:
+            issue.volume_num = item_info['series']['volume_num']
         if 'parent' in item_info['publisher']:
             issue.publisher = item_info['publisher']['parent']['name']
         if 'creator_sections' in item_info:
