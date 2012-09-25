@@ -228,13 +228,11 @@ def _print_download_progress(value=None, message=None, error=None):
     if error is not None:
         print "ERROR: %s" % error
     if value is not None:
-        sys.stdout.write("\r")
-        if value < 100:
-            sys.stdout.write(" %02d%% " % value)
-        else:
-            sys.stdout.write(" 100%\n")
+        sys.stdout.write("\r %02d%% " % value)
         if message is not None:
             sys.stdout.write(message)
+        if value >= 100:
+            sys.stdout.write("\n")
     sys.stdout.flush()
 
 
