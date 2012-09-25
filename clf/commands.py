@@ -91,6 +91,39 @@ def list(query=None, service_name=None, series_id=None):
             print "[%s] %s (%s)" % (series.series_id, series.display_title, series.issue_count)
 
 
+@manager.option('query', nargs='?', default=None)
+@manager.option('-s', '--service', dest='service_name', default=None)
+@manager.option('-i', '--id', dest='series_id', default=None)
+def price(query=None, service_name=None, series_id=None):
+    ''' Gives the total price of the specified series or issues.
+    '''
+    service = _get_service_safe(service_name)
+
+    pattern = None
+    if query:
+        pattern = query.strip('\'" ')
+
+    total_price = 0
+    if series_id:
+        series = service.get_series(series_id)
+        for issue in series:
+            if pattern and not re.search(pattern, issue.display_title, re.IGNORECASE):
+                continue
+            if issue.price:
+                total_price += issue.price
+    else:
+        collection = service.get_collection()
+        for series in collection:
+            if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
+                continue
+            for issue in service.get_series(series.series_id):
+                if issue.price:
+                    total_price += issue.price
+    print "$%f" % total_price
+
+
+    
+
 @manager.command
 def download(service_name, issue_id, output, metadata_only=False):
     ''' Downloads comicbook issues.
@@ -224,11 +257,6 @@ def _get_service_safe(service_name, message="Choose the service for this command
         return account.services[service_name]
     except KeyError:
         raise Exception("No such service: %s" % service_name)
-
-
-def _filter_series(service, query, series_id):
-
-    pass
 
 
 def _print_download_progress(value=None, message=None, error=None):
