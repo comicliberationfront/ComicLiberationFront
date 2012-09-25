@@ -80,16 +80,15 @@ def list(query=None, service_name=None, series_id=None):
     if series_id:
         series = service.get_series(series_id)
         for issue in series:
-            if pattern and not re.search(pattern, issue.title, re.IGNORECASE):
+            if pattern and not re.search(pattern, issue.display_title, re.IGNORECASE):
                 continue
             print "[%s] %s" % (issue.comic_id, issue.display_title)
     else:
         collection = service.get_collection()
         for series in collection:
-            series_title = series.display_title
-            if pattern and not re.search(pattern, series_title, re.IGNORECASE):
+            if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
                 continue
-            print "[%s] %s (%s)" % (series.series_id, series_title, series.issue_count)
+            print "[%s] %s (%s)" % (series.series_id, series.display_title, series.issue_count)
 
 
 @manager.command
