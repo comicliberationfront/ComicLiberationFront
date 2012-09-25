@@ -37,6 +37,7 @@ class Issue(object):
         self.synopsis = None
         self.series_synopsis = None
         self.print_publish_date = None
+        self.price = 0
         self.creators = {}
         self.pages = []
 

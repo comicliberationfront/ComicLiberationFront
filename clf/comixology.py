@@ -170,6 +170,8 @@ class ComicsAccount(object):
                 issue.volume_num = item['issue_summary']['volume_num']
             if 'volume_title' in item['issue_summary']:
                 issue.volume_title = item['issue_summary']['volume_title']
+            if 'usd_price_in_cents' in item['issue_summary']:
+                issue.price = int(item['issue_summary']['usd_price_in_cents']) / 100.0
             issues.append(issue)
         return issues
 
