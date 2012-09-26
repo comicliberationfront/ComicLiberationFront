@@ -9,7 +9,7 @@ import logging
 class Cache(object):
     def __init__(self, cache_dir=None, default_lifetime=None, logger=None):
         if not default_lifetime:
-            default_lifetime = datetime.timedelta(minutes=60)
+            default_lifetime = datetime.timedelta(days=1)
         if not logger:
             logger = logging.getLogger('cache')
         if cache_dir and not os.path.exists(cache_dir):
