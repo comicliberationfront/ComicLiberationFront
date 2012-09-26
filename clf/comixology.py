@@ -207,7 +207,7 @@ class ComicsAccount(object):
         issue.series_title = item_info['series']['title']
         issue.series_synopsis = item_info['series']['synopsis']
         issue.pages = []
-        
+
         if 'print_publish_date' in item_info:
             issue.print_publish_date = datetime.date(
                     item_info['print_publish_date']['year'],
@@ -223,6 +223,13 @@ class ComicsAccount(object):
             issue.is_volume_tpb = True
         elif 'volume_num' in item_info['series']:
             issue.volume_num = item_info['series']['volume_num']
+        elif issue.volume_title is not None:
+            issue.is_volume_tpb = True
+        # Patching series title (hack)
+        if (issue.volume_title is not None and
+            issue.series_title.lower().startswith(issue.title.lower()) and 
+            issue.series_title.lower().endswith(issue.volume_title.lower())):
+            issue.series_title = issue.title
         if 'parent' in item_info['publisher']:
             issue.publisher = item_info['publisher']['parent']['name']
         if 'creator_sections' in item_info:

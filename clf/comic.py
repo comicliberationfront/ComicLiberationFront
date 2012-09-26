@@ -1,4 +1,5 @@
 import datetime
+import string
 
 
 class Series(object):
@@ -53,11 +54,13 @@ class Issue(object):
     def display_title(self):
         return self.get_display_title()
 
-    def get_display_title(self, num_sep=' #', vol_sep=': '):
-        dt = self.title
+    def get_display_title(self, num_sep=' #', vol_sep=': ', title_sep=' - '):
+        dt = self.series_title
         vdt = self.get_volume_display_title(vol_sep)
         if vdt is not None:
-            dt += ' ' + vdt
+            dt += ' ' + vdt.lstrip()
+        if self.title != self.series_title:
+            dt += title_sep + self.title
         if self.num:
             try:
                 pretty_num = "%02d" % int(self.num)
@@ -80,6 +83,8 @@ class Issue(object):
             if self.volume_title:
                 dt += '%s%s' % (vol_sep, self.volume_title)
             return dt
+        elif self.volume_title:
+            return '%s%s' % (vol_sep, self.volume_title)
         else:
             return None
 

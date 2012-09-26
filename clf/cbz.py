@@ -53,8 +53,15 @@ class CbzLibrary(object):
         else:
             vdt = issue.get_volume_display_title(' - ')
             if vdt is not None:
-                path += os.sep + _clean_path(issue.series_title + ' ' + vdt)
-            path += os.sep + _clean_path(issue.get_display_title(' ', ' - ')) + '.cbz'
+                path += os.sep + _clean_path(vdt)
+            path += os.sep + _clean_path(issue.title)
+            if issue.num:
+                try:
+                    pretty_num = "%02d" % int(issue.num)
+                except ValueError:
+                    pretty_num = issue.num
+                path += ' ' + pretty_num
+            path += '.cbz'
         return os.path.join(self.root_path, path)
 
     def sync_issues(self, builder, issues, 
