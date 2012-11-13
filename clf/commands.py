@@ -177,6 +177,7 @@ def sync(query=None, service_name=None, series_id=None, new_only=False, metadata
     builder.set_progress_subscriber(_print_download_progress)
     builder.set_temp_folder(cache_dir)
     library.sync_issues(builder, issues, 
+            new_only=new_only,
             metadata_only=metadata_only, 
             subscriber=_print_sync_progress) 
 
@@ -206,8 +207,9 @@ def print_issue(issue_id, service_name=None):
 def _get_account():
     try:
         ua = UserAccount.load()
-    except:
+    except Exception as e:
         print "Creating new CLF session."
+        print "(reason: %s)" % e
         ua = UserAccount()
     ua.set_caches(cache)
     return ua
