@@ -66,12 +66,15 @@ class CbzLibrary(object):
 
     def sync_issues(self, builder, issues, 
             metadata_only=False, 
+            new_only=False,
             force=False,
             subscriber=None):
         for i, issue in enumerate(issues):
             prefix = "[%s] %s" % (issue.comic_id, issue.display_title)
             path = self.get_issue_path(issue)
             if os.path.isfile(path):
+                if new_only:
+                    continue
                 do_sync = False
                 do_sync_reason = None
                 if force:
