@@ -1,19 +1,12 @@
-import json
+import re
 import os.path
 import pprint
-import re
-import sys
-from flask import g
+import progressbar
 from flask.ext.script import prompt, prompt_pass
 from auth import UserAccount, get_service_classes, get_service_class
-from cache import Cache
-from clf import manager, cache_dir
-from cbz import CbzBuilder, CbzLibrary, get_issue_version
-
-
-# Globals
-
-cache = Cache(cache_dir)
+from clf import app, manager, cache_dir
+from cbz import CbzBuilder, CbzLibrary
+from downloader import DownloadProgress
 
 
 # Command functions
@@ -24,18 +17,18 @@ def services(available=False):
     '''
     account = _get_account()
     if available:
-        print "Available services:"
+        app.logger.info("Available services:")
         for c in get_service_classes():
             if c.service_name in account.services:
-                print "%s (connected)" % c.service_label
+                app.logger.info("%s (connected)" % c.service_label)
             else:
-                print c.service_label
+                app.logger.info(c.service_label)
     else:
-        print "Connected services:"
+        app.logger.info("Connected services:")
         for s in account.services:
-            print "%s (logged in as %s)" % (
+            app.logger.info("%s (logged in as %s)" % (
                     account.services[s].service_label, 
-                    account.services[s].username)
+                    account.services[s].username))
 
 @manager.command
 def login(username=None, password=None, service=None):
@@ -44,7 +37,7 @@ def login(username=None, password=None, service=None):
     try:
         service_class = _get_service_class_safe(service, message="Choose a service to log into:")
     except Exception as e:
-        print e
+        app.logger.error(e)
         return 1
 
     if username is None:
@@ -56,39 +49,50 @@ def login(username=None, password=None, service=None):
         service_account = service_class(username)
         service_account.login(password)
     except Exception as e:
-        print "Error authenticating with %s" % service_class.service_label
-        print e
+        app.logger.error("Error authenticating with %s" % service_class.service_label)
+        app.logger.error(e)
         return 1
 
     account = _get_account()
-    account.services[service] = service_account
+    account.services[service_class.service_name] = service_account
     account.save()
 
 
 @manager.option('query', nargs='?', default=None)
 @manager.option('-s', '--service', dest='service_name', default=None)
 @manager.option('-i', '--id', dest='series_id', default=None)
+@manager.option('-v', '--vid', dest='volume_id', default=None)
 @manager.option('-p', '--path', dest='print_path', default=False, action='store_true')
-def list(query=None, service_name=None, series_id=None, print_path=False):
+def list(query=None, service_name=None, series_id=None, volume_id=None, print_path=False):
     ''' Lists series or issues.
     '''
     service = _get_service_safe(service_name)
     account = _get_account()
     library = CbzLibrary(account.library_path)
 
+    def print_paths(parent):
+        if print_path:
+            for issue in parent.get_issues():
+                app.logger.info(" > %s" % library.get_issue_path(issue))
+
     if series_id is not None:
-        issues = _get_filtered_issues(service, query, series_id)
+        vols = _get_filtered_volumes(service, query, series_id)
+        vols = sorted(vols, key=lambda s: s.title)
+        for vol in vols:
+            app.logger.info("[%s] %s" % (vol.volume_id, vol.get_display_title()))
+            print_paths(vol)
+    elif volume_id is not None:
+        issues = _get_filtered_issues(service, query, volume_id=volume_id)
+        issues = sorted(issues, key=lambda s: s.title)
         for issue in issues:
-            print "[%s] %s" % (issue.comic_id, issue.display_title)
-            if print_path:
-                print " > %s" % library.get_issue_path(service.get_issue(issue.comic_id))
+            app.logger.info("[%s] %s" % (issue.comic_id, issue.get_display_title()))
+            print_paths(issue)
     else:
         series = _get_filtered_series(service, query)
+        series = sorted(series, key=lambda s: s.title)
         for s in series:
-            print "[%s] %s (%s issues)" % (s.series_id, s.display_title, s.issue_count)
-            if print_path:
-                for issue in service.get_series(s.series_id):
-                    print " > %s" % library.get_issue_path(service.get_issue(issue.comic_id))
+            app.logger.info("[%s] %s (%s issues)" % (s.series_id, s.get_display_title(), s.issue_count))
+            print_paths(s)
 
 
 @manager.option('query', nargs='?', default=None)
@@ -110,28 +114,36 @@ def price(query=None, service_name=None, series_id=None):
         else:
             free_count += 1
 
-    print "$%f out of %d paid issues." % (total_price, paid_count)
-    print "%d free issues." % (free_count)
+    app.logger.info("$%f out of %d paid issues." % (total_price, paid_count))
+    app.logger.info("%d free issues." % (free_count))
     
 
-@manager.command
-def download(service_name, issue_id, output, metadata_only=False):
+@manager.option('issue_id')
+@manager.option('-s', '--service', dest='service_name', default=None)
+@manager.option('-o', '--output', dest='output', default=None)
+@manager.option('--metadata-only', dest='metadata_only', default=False, action='store_true')
+def download(issue_id, service_name=None, output=None, metadata_only=False):
     ''' Downloads comicbook issues.
     '''
     service = _get_service_safe(service_name)
 
     issue = service.get_issue(issue_id)
-    print "[%s] %s" % (issue.comic_id, issue.display_title)
+    app.logger.info("[%s] %s" % (issue.comic_id, issue.get_display_title()))
     
-    builder = CbzBuilder()
-    builder.set_watermark(service.service_name, service.username)
-    builder.set_progress_subscriber(_print_download_progress)
-    builder.set_temp_folder(cache_dir)
+    if output is None:
+        account = _get_account()
+        library = CbzLibrary(account.library_path)
+        output = library.get_issue_path(issue)
     out_path = output.strip('\'" ')
+
+    builder = CbzBuilder(service, subscriber=CliDownloadProgress(), temp_folder=cache_dir)
+    builder.username = service.username
     if metadata_only:
-        builder.update(issue, out_path=path)
+        builder.update(issue, out_path=out_path)
+        app.logger.info("Issue updated at: %s" % out_path)
     else:
-        builder.save(issue, out_path=out_path, subscriber=_print_sync_progress)
+        builder.save(issue, out_path=out_path)
+        app.logger.info("Issue saved at: %s" % out_path)
 
 
 @manager.option('query', nargs='?', default=None)
@@ -139,7 +151,7 @@ def download(service_name, issue_id, output, metadata_only=False):
 @manager.option('-i', '--id', dest='series_id', default=None)
 @manager.option('--new-only', dest='new_only', default=False, action='store_true')
 @manager.option('--metadata-only', dest='metadata_only', default=False, action='store_true')
-@manager.option('--library_dir', dest='lib_dir', default=None)
+@manager.option('--library-dir', dest='lib_dir', default=None)
 def sync(query=None, service_name=None, series_id=None, new_only=False, metadata_only=False, lib_dir=None):
     ''' Synchronizes the local comicbook library with the connected or specified services.
     '''
@@ -156,30 +168,27 @@ def sync(query=None, service_name=None, series_id=None, new_only=False, metadata
 
     if series_id is None:
         if query is None:
-            print "Getting all issues from %s..." % service.service_label
-            issues = service.get_all_issues()
+            app.logger.info("Getting all issues from %s..." % service.service_label)
+            issues = service.get_collection().get_issues()
         else:
             issues = []
             query = query.strip('\'" ')
             collection = service.get_collection()
             for series in collection:
-                if not re.search(query, series.display_title, re.IGNORECASE):
+                if not re.search(query, series.get_display_title(), re.IGNORECASE):
                     continue
-                print "Getting issues from %s for: %s" % (service.service_label, series.display_title)
-                issues += service.get_all_issues(series.series_id)
+                app.logger.info("Getting issues from %s for: %s" % (service.service_label, series.get_display_title()))
+                issues += series.get_issues()
     else:
-        print "Getting issues from %s for series ID %s" % (service.service_label, series_id)
-        issues = service.get_all_issues(series_id)
+        app.logger.info("Getting issues from %s for series ID %s" % (service.service_label, series_id))
+        issues = service.get_collection().get_series(series_id).get_issues()
 
-    print "Syncing issues..."
-    builder = CbzBuilder()
-    builder.set_watermark(service.service_name, service.username)
-    builder.set_progress_subscriber(_print_download_progress)
-    builder.set_temp_folder(cache_dir)
+    app.logger.info("Syncing issues...")
+    builder = CbzBuilder(service, subscriber=CliDownloadProgress(), temp_folder=cache_dir)
+    builder.username = service.username
     library.sync_issues(builder, issues, 
             new_only=new_only,
-            metadata_only=metadata_only, 
-            subscriber=_print_sync_progress) 
+            metadata_only=metadata_only)
 
 
 @manager.command
@@ -189,7 +198,7 @@ def purchases(service_name=None):
     service = _get_service_safe(service_name)
     purchases = service.get_recent_purchases()
     for p in purchases:
-        print "[%s] %s" % (p.comic_id, p.display_title)
+        app.logger.info("[%s] %s" % (p.comic_id, p.get_display_title()))
 
 
 @manager.command
@@ -204,28 +213,55 @@ def print_issue(issue_id, service_name=None):
 
 # Helper functions
 
+class CliDownloadProgress(DownloadProgress):
+    def __init__(self):
+        DownloadProgress.__init__(self)
+        self.pbar = progressbar.ProgressBar()
+        self.started = False
+
+    def _doProgress(self, value, message=None):
+        # sys.stdout.write("\r %02d%% " % value)
+        # if message is not None:
+        #     sys.stdout.write(message)
+        # if value >= 100:
+        #     sys.stdout.write("\n")
+        # sys.stdout.flush()
+        if not self.started:
+            self.pbar.start()
+        self.pbar.update(value)
+        if value >= 100:
+            self.pbar.finish()
+
+
 def _get_account():
     try:
         ua = UserAccount.load()
     except Exception as e:
-        print "Creating new CLF session."
-        print "(reason: %s)" % e
+        app.logger.info("Creating new CLF session.")
+        app.logger.info("(reason: %s)" % e)
         ua = UserAccount()
-    ua.set_caches(cache)
+    ua.set_cache_dir(os.path.join(cache_dir, 'reqs'))
     return ua
 
 
+def _prompt_index(message, default=1, min_val=1, max_val=10):
+    choice = prompt(message, default=str(default))
+    choice = int(choice)
+    if choice < min_val or choice > max_val:
+        raise Exception("Please choose one of the available options.")
+    return choice
+
 def _get_service_class_safe(service_name, message="Choose the service for this command:"):
     if service_name is None:
-        print message
-        default_service_name = None
-        for i, c in enumerate(get_service_classes()):
+        app.logger.info(message)
+        service_classes = list(get_service_classes())
+        for i, c in enumerate(service_classes):
             if i == 0:
-                default_service_name = c.service_name
-                print " - %s [default]" % c.service_name
+                app.logger.message(" - [%d] %s [default]" % (i+1, c.service_name))
             else:
-                print " - %s" % c.service_name
-        service_name = prompt('service', default=default_service_name)
+                app.logger.message(" - [%d] %s" % (i+1, c.service_name))
+        choice = _prompt_index('service', max_val=len(service_classes)+1)
+        service_name = service_classes[choice-1].service_name
 
     try:
         return get_service_class(service_name)
@@ -236,15 +272,15 @@ def _get_service_class_safe(service_name, message="Choose the service for this c
 def _get_service_safe(service_name, message="Choose the service for this command:"):
     account = _get_account()
     if service_name is None:
-        print message
-        default_service_name = None
+        app.logger.info(message)
+        names = account.services.keys()
         for i, c in enumerate(account.services):
             if i == 0:
-                default_service_name = c
-                print " - %s [default]" % c
+                app.logger.info(" - [%d] %s [default]" % (i+1, c))
             else:
-                print " - %s" % c
-        service_name = prompt('service', default=default_service_name)
+                app.logger.info(" - [%d] %s" % (i+1, c))
+        choice = _prompt_index('service', max_val=len(names)+1)
+        service_name = names[choice-1]
 
     try:
         return account.services[service_name]
@@ -259,46 +295,41 @@ def _get_filtered_series(service, query=None):
 
     collection = service.get_collection()
     for series in collection:
-        if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
+        if pattern and not re.search(pattern, series.get_display_title(), re.IGNORECASE):
             continue
         yield series
 
 
-def _get_filtered_issues(service, query=None, series_id=None):
+def _get_filtered_volumes(service, query=None, series_id=None):
     pattern = None
     if query:
         pattern = query.strip('\'" ')
 
+    collection = service.get_collection()
     if series_id:
-        series = service.get_series(series_id)
-        for issue in series:
-            if pattern and not re.search(pattern, issue.display_title, re.IGNORECASE):
+        collection = filter(lambda s: s.series_id == series_id, collection)
+    for series in collection:
+        for vol in series.volumes:
+            if pattern and not re.search(pattern, vol.get_display_title(), re.IGNORECASE):
                 continue
-            yield issue
-    else:
-        collection = service.get_collection()
-        for series in collection:
-            if pattern and not re.search(pattern, series.display_title, re.IGNORECASE):
-                continue
-            for issue in service.get_series(series.series_id):
+            yield vol
+
+
+def _get_filtered_issues(service, query=None, series_id=None, volume_id=None):
+    pattern = None
+    if query:
+        pattern = query.strip('\'" ')
+
+    collection = service.get_collection()
+    if series_id:
+        collection = filter(lambda s: s.series_id == series_id, collection)
+    for series in collection:
+        volumes = series.volumes
+        if volume_id:
+            volumes = filter(lambda v: v.volume_id == volume_id, volumes)
+        for vol in volumes:
+            for issue in vol.issues:
+                if pattern and not re.search(pattern, issue.get_display_title(), re.IGNORECASE):
+                    continue
                 yield issue
-
-
-def _print_download_progress(value=None, message=None, error=None):
-    if error is not None:
-        print "ERROR: %s" % error
-    if value is not None:
-        sys.stdout.write("\r %02d%% " % value)
-        if message is not None:
-            sys.stdout.write(message)
-        if value >= 100:
-            sys.stdout.write("\n")
-    sys.stdout.flush()
-
-
-def _print_sync_progress(message=None, error=None):
-    if error is not None:
-        print "ERROR: %s" % error
-    if message is not None:
-        print message
 

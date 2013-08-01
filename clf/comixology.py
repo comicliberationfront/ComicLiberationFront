@@ -3,37 +3,56 @@ import json
 import urllib
 import urllib2
 import urlparse
-import httplib
-from cache import DummyCache
-from comic import Series, Issue, Page
+import logging
+from service import ServiceAccount
+from comic import Collection, Series, Volume, Issue, IssueMetadata
+from downloader import PagesIssueDownloader
 
 
 COMIXOLOGY_API_URL = 'https://secure.comixology.com/ios/api/{0}/{1}/?{2}'
 COMIXOLOGY_API_NAMES = {
-        'ios': 'com.iconology.comics',
+        'ios': 'com.iconology.Comics',
         'android': 'com.iconology.android.comics',
         'windows8': 'com.iconology.windows.comics'
         }
 COMIXOLOGY_API_VERSION = '3.0'
 
 
-class ComicsAccount(object):
+class IssuePage(object):
+    def __init__(self):
+        self.thumbnail_url = None
+        self.url = None
+        self.width = 0
+        self.height = 0
+        self.size = 0
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+
+class ComixologyIssueMetadata(IssueMetadata):
+    def __init__(self):
+        IssueMetadata.__init__(self)
+        self.pages = []
+
+
+class ComicsAccount(ServiceAccount):
     service_name = 'comixology'
     service_label = 'Comixology'
 
-    def __init__(self, username, password=None, api_name='ios'):
-        self.username = username
+    def __init__(self, username=None, password=None, api_name='ios'):
+        ServiceAccount.__init__(self, username)
         self.password = password
         self.email = None
         self.api_name = api_name
-        self.cache = DummyCache()
+        self.logger = logging.getLogger(__name__)
 
     @property
     def cdn(self):
         return CDN
 
     def login(self, password):
-        print "Logging in as '%s'..." % self.username
+        self.logger.info("Logging in as '%s'..." % self.username)
         data = {
                 'format': 'json',
                 'action': 'login',
@@ -49,65 +68,30 @@ class ComicsAccount(object):
         self.email = result['account_info']['email']
         self.password = password
 
-        print "...logged in as '%s' (%s)" % (
+        self.logger.info("...logged in as '%s' (%s)" % (
                 self.username,
                 self.email
-                )
+                ))
 
     def get_cookie(self):
         self._check_logged_in()
 
-        cookie = {
-                'service': ComicsAccount.service_name,
-                'username': self.username,
+        cookie = ServiceAccount.get_cookie(self)
+        cookie.update({
                 'password': self.password,
                 'email': self.email,
                 'api_name': self.api_name
-                }
+                })
         return cookie
 
-    def is_logged_in(self):
-        return self.password != None
-
-    def get_recent_purchases(self):
-        self._check_logged_in()
-        
-        result = self.cache.get('get_recent_purchases')
-        if result is None:
-            data = {
-                    'username': self.username,
-                    'password': self.password,
-                    'format': 'json',
-                    'action': 'getRecentPurchases'
-                    }
-            req = self._make_api_request(data)
-            resp = urllib2.urlopen(req)
-            result = json.loads(resp.read())
-            self.cache.set('get_recent_purchases', result)
-
-        purchases = []
-        for item in result['items']:
-            issue = Issue()
-            issue.comic_id = item['issue_summary']['comic_id']
-            issue.series_id = item['issue_summary']['series_id']
-            issue.title = item['issue_summary']['title']
-            issue.num = item['issue_summary']['issue_num']
-            issue.cover_url = item['issue_summary']['cover_image']['scalable_representation']['url']
-            issue.url = item['issue_summary']['share_url']
-            purchases.append(issue)
-        return purchases
-
-    def get_all_issues(self, series_id=None):
-        if series_id:
-            series = self.get_series(series_id)
-            for i in series:
-                yield self.get_issue(i.comic_id)
+    def eat_cookie(self, cookie):
+        ServiceAccount.eat_cookie(self, cookie)
+        self.email = cookie['email']
+        self.password = cookie['password']
+        if 'api_name' in cookie:
+            self.api_name = cookie['api_name']
         else:
-            collection = self.get_collection()
-            for series in collection:
-                issues = self.get_series(series.series_id)
-                for i in issues:
-                    yield self.get_issue(i.comic_id)
+            self.api_name = 'windows8'
 
     def get_collection(self):
         self._check_logged_in()
@@ -125,22 +109,32 @@ class ComicsAccount(object):
             result = json.loads(resp.read())
             self.cache.set('get_collection', result)
 
-        collection = []
+        collection = Collection()
+
         for item in result['items']:
             series = Series()
-            series.series_id = item['series_id']
             series.title = item['title']
-            series.logo_url = item['square_image']['scalable_representation']['url']
-            series.issue_count = int(item['total_comics'])
-            if 'volume_num' in item:
-                series.volume_num = item['volume_num']
+            series.series_id = item['series_id']
+            collection.series.append(series)
+
+            vol = Volume()
+            vol.title = item['title']
+            vol.volume_id = item['series_id']
+            vol.is_transparent = True
             if 'volume_title' in item:
-                series.volume_title = item['volume_title']
-            collection.append(series)
+                vol.title = item['volume_title']
+            if 'volume_num' in item:
+                vol.volume_num = item['volume_num']
+            vol.logo_url = item['square_image']['scalable_representation']['url']
+            
+            vol.set_preview_issue_count(int(item['total_comics']))
+            vol.set_issue_loader(self._get_issues)
+
+            series.volumes.append(vol)
 
         return collection
-
-    def get_series(self, series_id):
+    
+    def _get_issues(self, series_id):
         self._check_logged_in()
 
         result = self.cache.get('get_series_%s' % series_id)
@@ -161,21 +155,17 @@ class ComicsAccount(object):
         for item in result['items']:
             issue = Issue()
             issue.comic_id = item['issue_summary']['comic_id']
-            issue.series_id = item['issue_summary']['series_id']
             issue.title = item['issue_summary']['title']
             issue.num = item['issue_summary']['issue_num']
             issue.cover_url = item['issue_summary']['cover_image']['scalable_representation']['url']
             issue.url = item['issue_summary']['share_url']
-            if 'volume_num' in item['issue_summary']:
-                issue.volume_num = item['issue_summary']['volume_num']
-            if 'volume_title' in item['issue_summary']:
-                issue.volume_title = item['issue_summary']['volume_title']
             if 'usd_price_in_cents' in item['issue_summary']:
                 issue.price = int(item['issue_summary']['usd_price_in_cents']) / 100.0
+            issue.set_metadata_loader(self._get_issue_metadata)
             issues.append(issue)
         return issues
 
-    def get_issue(self, comic_id):
+    def _get_issue_metadata(self, comic_id):
         self._check_logged_in()
 
         item = self.cache.get('get_issue_%s' % comic_id)
@@ -194,19 +184,14 @@ class ComicsAccount(object):
 
         item_info = item['issue_info']
 
-        issue = Issue()
-        issue.comic_id = item['comic_id']
+        issue = ComixologyIssueMetadata()
         issue.version = item['version']
-        issue.title = item_info['title']
+        issue.synopsis = item_info['synopsis']
+
         issue.publisher = item_info['publisher']['name']
         issue.imprint = item_info['publisher']['name']
-        issue.num = ''
-        issue.synopsis = item_info['synopsis']
-        issue.cover_url = item_info['cover_image']['image_descriptors'][-1]['uri']
-        issue.series_id = item_info['series']['series_id']
-        issue.series_title = item_info['series']['title']
-        issue.series_synopsis = item_info['series']['synopsis']
-        issue.pages = []
+        if 'parent' in item_info['publisher']:
+            issue.publisher = item_info['publisher']['parent']['name']
 
         if 'print_publish_date' in item_info:
             issue.print_publish_date = datetime.date(
@@ -214,24 +199,13 @@ class ComicsAccount(object):
                     item_info['print_publish_date']['month'],
                     1
                     )
-        if 'issue_num' in item_info['series']:
-            issue.num = item_info['series']['issue_num']
-        if 'issue_volume_title' in item_info['series']:
-            issue.volume_title = item_info['series']['issue_volume_title']
+
+        #if 'issue_num' in item_info['series']:
+        #    issue.num = item_info['series']['issue_num']
         if 'issue_volume_num' in item_info['series']:
-            issue.volume_num = item_info['series']['issue_volume_num']
+        #    issue.num = item_info['series']['issue_volume_num']
             issue.is_volume_tpb = True
-        elif 'volume_num' in item_info['series']:
-            issue.volume_num = item_info['series']['volume_num']
-        elif issue.volume_title is not None:
-            issue.is_volume_tpb = True
-        # Patching series title (hack)
-        if (issue.volume_title is not None and
-            issue.series_title.lower().startswith(issue.title.lower()) and 
-            issue.series_title.lower().endswith(issue.volume_title.lower())):
-            issue.series_title = issue.title
-        if 'parent' in item_info['publisher']:
-            issue.publisher = item_info['publisher']['parent']['name']
+
         if 'creator_sections' in item_info:
             for cs in item_info['creator_sections']:
                 creator_type = None
@@ -245,19 +219,25 @@ class ComicsAccount(object):
                     creator_type = 'inkers'
                 if creator_type:
                     issue.creators[creator_type] = [w['name']['display'] for w in cs['creators']]
+
         for page in item['book_info']['pages']:
             img_desc = page['descriptor_set']['image_descriptors']
-            p = Page()
+            p = IssuePage()
             p.thumbnail_url = img_desc[0]['uri']
             p.url = img_desc[1]['uri']
             p.width = int(img_desc[1]['pixel_width'])
             p.height = int(img_desc[1]['pixel_height'])
             p.size = int(img_desc[1]['expected_content_length'])
             issue.pages.append(p)
+
         return issue
 
+    def get_issue_downloader(self, issue, ctx):
+        downloader = PagesIssueDownloader(issue, ctx)
+        return downloader
+
     def _check_logged_in(self):
-        if not self.is_logged_in():
+        if self.password == None:
             raise Exception("You must login.")
 
     def _make_api_request(self, data):
@@ -268,19 +248,6 @@ class ComicsAccount(object):
                 )
         req = urllib2.Request(api_url)
         return req
-
-    @staticmethod
-    def from_cookie(cookie):
-        if cookie['service'] != ComicsAccount.service_name:
-            raise Exception("This cookie is not for a Comixology service.")
-        account = ComicsAccount(cookie['username'])
-        account.email = cookie['email']
-        account.password = cookie['password']
-        if 'api_name' in cookie:
-            account.api_name = cookie['api_name']
-        else:
-            account.api_name = 'windows8'
-        return account
 
 
 class CDN(object):

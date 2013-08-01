@@ -4,3 +4,7 @@ Jinja2==2.6
 Werkzeug==0.8.3
 argparse==1.2.1
 lxml==2.3
+progressbar==2.3
+requests==1.2.3
+simplejson==3.3.0
+wsgiref==0.1.2

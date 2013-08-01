@@ -7,36 +7,38 @@ class ComicInfo(object):
     def from_issue(issue):
         ci = ComicInfo()
         ci.title = issue.title
-        ci.series = issue.series_title
-        ci.summary = issue.synopsis
+        ci.series = issue.parent.get_display_title()
+        ci.summary = issue.metadata.synopsis
         if issue.num:
             ci.number = issue.num
-        if issue.print_publish_date:
-            ci.year = issue.print_publish_date.year
-            ci.month = issue.print_publish_date.month
-        if 'writers' in issue.creators:
-            ci.writers = issue.creators['writers']
-        if 'pencillers' in issue.creators:
-            ci.pencillers = issue.creators['pencillers']
-        if 'inkers' in issue.creators:
-            ci.inkers = issue.creators['inkers']
-        if 'artists' in issue.creators:
+        if issue.metadata.print_publish_date:
+            ci.year = issue.metadata.print_publish_date.year
+            ci.month = issue.metadata.print_publish_date.month
+        if 'writers' in issue.metadata.creators:
+            ci.writers = issue.metadata.creators['writers']
+        if 'pencillers' in issue.metadata.creators:
+            ci.pencillers = issue.metadata.creators['pencillers']
+        if 'inkers' in issue.metadata.creators:
+            ci.inkers = issue.metadata.creators['inkers']
+        if 'artists' in issue.metadata.creators:
             if not ci.pencillers:
                 ci.pencillers = []
             if not ci.inkers:
                 ci.inkers = []
-            for a in issue.creators['artists']:
+            for a in issue.metadata.creators['artists']:
                 ci.pencillers.append(a)
                 ci.inkers.append(a)
-        ci.publisher = issue.publisher
-        ci.imprint = issue.imprint
+        ci.publisher = issue.metadata.publisher
+        ci.imprint = issue.metadata.imprint
         ci.web = 'http://www.comixology.com/digital-comic/%s' % issue.comic_id
-        for i, p in enumerate(issue.pages):
-            pi = PageInfo(i)
-            pi.size = p.size
-            pi.width = p.width
-            pi.height = p.height
-            ci.pages.append(pi)
+
+        if hasattr(issue.metadata, 'pages'):
+            for i, p in enumerate(issue.metadata.pages):
+                pi = PageInfo(i)
+                pi.size = p.size
+                pi.width = p.width
+                pi.height = p.height
+                ci.pages.append(pi)
 
         return ci
 

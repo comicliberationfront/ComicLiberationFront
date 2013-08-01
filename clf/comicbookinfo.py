@@ -6,29 +6,30 @@ class ComicBookInfo(object):
     @staticmethod
     def from_issue(issue):
         cbi = ComicBookInfo()
-        cbi.last_modified = datetime.strptime(
-                issue.version,
-                '%Y%m%d%H%M%S'
-                )
-        cbi.series = issue.series_title
+        if issue.metadata.version:
+            cbi.last_modified = datetime.strptime(
+                    issue.metadata.version,
+                    '%Y%m%d%H%M%S'
+                    )
+        cbi.series = issue.parent.get_display_title()
         cbi.title = issue.title
-        cbi.publisher = issue.publisher
-        cbi.comments = issue.synopsis
+        cbi.publisher = issue.metadata.publisher
+        cbi.comments = issue.metadata.synopsis
         if issue.num:
             cbi.issue = issue.num
-        if issue.volume_num:
-            cbi.volume = issue.volume_num
-        if issue.print_publish_date:
-            cbi.publication_month = issue.print_publish_date.month
-            cbi.publication_year = issue.print_publish_date.year
-        if 'writers' in issue.creators:
-            cbi.writers = issue.creators['writers']
-        if 'pencillers' in issue.creators:
-            cbi.pencillers = issue.creators['pencillers']
-        if 'inkers' in issue.creators:
-            cbi.inkers = issue.creators['inkers']
-        if 'artists' in issue.creators:
-            cbi.artists = issue.creators['artists']
+        if issue.parent.volume_num:
+            cbi.volume = issue.parent.volume_num
+        if issue.metadata.print_publish_date:
+            cbi.publication_month = issue.metadata.print_publish_date.month
+            cbi.publication_year = issue.metadata.print_publish_date.year
+        if 'writers' in issue.metadata.creators:
+            cbi.writers = issue.metadata.creators['writers']
+        if 'pencillers' in issue.metadata.creators:
+            cbi.pencillers = issue.metadata.creators['pencillers']
+        if 'inkers' in issue.metadata.creators:
+            cbi.inkers = issue.metadata.creators['inkers']
+        if 'artists' in issue.metadata.creators:
+            cbi.artists = issue.metadata.creators['artists']
         return cbi
 
     def __init__(self, title='', issue=-1):

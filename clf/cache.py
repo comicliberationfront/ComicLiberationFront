@@ -7,17 +7,15 @@ import logging
 
 
 class Cache(object):
-    def __init__(self, cache_dir=None, default_lifetime=None, logger=None):
+    def __init__(self, cache_dir=None, default_lifetime=None):
         if not default_lifetime:
             default_lifetime = datetime.timedelta(days=1)
-        if not logger:
-            logger = logging.getLogger('cache')
         if cache_dir and not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
         self.cache_dir = cache_dir
         self.default_lifetime = default_lifetime
         self.items = {}
-        self.logger = logger
+        self.logger = logging.getLogger(__name__)
 
     def has(self, key):
         if key in self.items:
